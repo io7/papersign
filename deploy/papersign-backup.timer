@@ -1,0 +1,10 @@
+[Unit]
+Description=Hourly PaperSign PostgreSQL backup
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,1 @@
+ALTER TABLE "document_export" ADD COLUMN "started_at" timestamp with time zone;

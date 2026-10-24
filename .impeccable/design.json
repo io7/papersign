@@ -1,0 +1,652 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-21T07:31:48Z",
+  "title": "Design System: PaperSign",
+  "extensions": {
+    "colorMeta": {
+      "green": {
+        "role": "primary",
+        "displayName": "Deep green",
+        "tonalRamp": [
+          "oklch(15% 0.04746 180.31)",
+          "oklch(25% 0.04746 180.31)",
+          "oklch(35% 0.04746 180.31)",
+          "oklch(45% 0.04746 180.31)",
+          "oklch(55% 0.04746 180.31)",
+          "oklch(65% 0.04746 180.31)",
+          "oklch(80% 0.04746 180.31)",
+          "oklch(95% 0.04746 180.31)"
+        ]
+      },
+      "green-hover": {
+        "role": "primary",
+        "displayName": "Green hover",
+        "tonalRamp": [
+          "oklch(15% 0.06016 177.70)",
+          "oklch(25% 0.06016 177.70)",
+          "oklch(35% 0.06016 177.70)",
+          "oklch(45% 0.06016 177.70)",
+          "oklch(55% 0.06016 177.70)",
+          "oklch(65% 0.06016 177.70)",
+          "oklch(80% 0.06016 177.70)",
+          "oklch(95% 0.06016 177.70)"
+        ]
+      },
+      "focus": {
+        "role": "primary",
+        "displayName": "Focus green",
+        "tonalRamp": [
+          "oklch(15% 0.08392 169.13)",
+          "oklch(25% 0.08392 169.13)",
+          "oklch(35% 0.08392 169.13)",
+          "oklch(45% 0.08392 169.13)",
+          "oklch(55% 0.08392 169.13)",
+          "oklch(65% 0.08392 169.13)",
+          "oklch(80% 0.08392 169.13)",
+          "oklch(95% 0.08392 169.13)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Text ink",
+        "tonalRamp": [
+          "oklch(15% 0.03321 167.78)",
+          "oklch(25% 0.03321 167.78)",
+          "oklch(35% 0.03321 167.78)",
+          "oklch(45% 0.03321 167.78)",
+          "oklch(55% 0.03321 167.78)",
+          "oklch(65% 0.03321 167.78)",
+          "oklch(80% 0.03321 167.78)",
+          "oklch(95% 0.03321 167.78)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted green-gray text",
+        "tonalRamp": [
+          "oklch(15% 0.02680 160.98)",
+          "oklch(25% 0.02680 160.98)",
+          "oklch(35% 0.02680 160.98)",
+          "oklch(45% 0.02680 160.98)",
+          "oklch(55% 0.02680 160.98)",
+          "oklch(65% 0.02680 160.98)",
+          "oklch(80% 0.02680 160.98)",
+          "oklch(95% 0.02680 160.98)"
+        ]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Workspace ground",
+        "tonalRamp": [
+          "oklch(15% 0.00448 134.85)",
+          "oklch(25% 0.00448 134.85)",
+          "oklch(35% 0.00448 134.85)",
+          "oklch(45% 0.00448 134.85)",
+          "oklch(55% 0.00448 134.85)",
+          "oklch(65% 0.00448 134.85)",
+          "oklch(80% 0.00448 134.85)",
+          "oklch(95% 0.00448 134.85)"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "White paper",
+        "tonalRamp": [
+          "oklch(15% 0.00000 0.00)",
+          "oklch(25% 0.00000 0.00)",
+          "oklch(35% 0.00000 0.00)",
+          "oklch(45% 0.00000 0.00)",
+          "oklch(55% 0.00000 0.00)",
+          "oklch(65% 0.00000 0.00)",
+          "oklch(80% 0.00000 0.00)",
+          "oklch(95% 0.00000 0.00)"
+        ]
+      },
+      "soft": {
+        "role": "neutral",
+        "displayName": "Soft green",
+        "tonalRamp": [
+          "oklch(15% 0.01017 145.50)",
+          "oklch(25% 0.01017 145.50)",
+          "oklch(35% 0.01017 145.50)",
+          "oklch(45% 0.01017 145.50)",
+          "oklch(55% 0.01017 145.50)",
+          "oklch(65% 0.01017 145.50)",
+          "oklch(80% 0.01017 145.50)",
+          "oklch(95% 0.01017 145.50)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Panel rule",
+        "tonalRamp": [
+          "oklch(15% 0.01202 145.48)",
+          "oklch(25% 0.01202 145.48)",
+          "oklch(35% 0.01202 145.48)",
+          "oklch(45% 0.01202 145.48)",
+          "oklch(55% 0.01202 145.48)",
+          "oklch(65% 0.01202 145.48)",
+          "oklch(80% 0.01202 145.48)",
+          "oklch(95% 0.01202 145.48)"
+        ]
+      },
+      "field-line": {
+        "role": "neutral",
+        "displayName": "Field edge",
+        "tonalRamp": [
+          "oklch(15% 0.02330 151.57)",
+          "oklch(25% 0.02330 151.57)",
+          "oklch(35% 0.02330 151.57)",
+          "oklch(45% 0.02330 151.57)",
+          "oklch(55% 0.02330 151.57)",
+          "oklch(65% 0.02330 151.57)",
+          "oklch(80% 0.02330 151.57)",
+          "oklch(95% 0.02330 151.57)"
+        ]
+      },
+      "button-line": {
+        "role": "neutral",
+        "displayName": "Secondary button edge",
+        "tonalRamp": [
+          "oklch(15% 0.01885 150.52)",
+          "oklch(25% 0.01885 150.52)",
+          "oklch(35% 0.01885 150.52)",
+          "oklch(45% 0.01885 150.52)",
+          "oklch(55% 0.01885 150.52)",
+          "oklch(65% 0.01885 150.52)",
+          "oklch(80% 0.01885 150.52)",
+          "oklch(95% 0.01885 150.52)"
+        ]
+      },
+      "specimen": {
+        "role": "neutral",
+        "displayName": "Signature specimen ground",
+        "tonalRamp": [
+          "oklch(15% 0.00566 128.52)",
+          "oklch(25% 0.00566 128.52)",
+          "oklch(35% 0.00566 128.52)",
+          "oklch(45% 0.00566 128.52)",
+          "oklch(55% 0.00566 128.52)",
+          "oklch(65% 0.00566 128.52)",
+          "oklch(80% 0.00566 128.52)",
+          "oklch(95% 0.00566 128.52)"
+        ]
+      },
+      "document-workspace": {
+        "role": "neutral",
+        "displayName": "PDF work area",
+        "tonalRamp": [
+          "oklch(15% 0.01072 136.56)",
+          "oklch(25% 0.01072 136.56)",
+          "oklch(35% 0.01072 136.56)",
+          "oklch(45% 0.01072 136.56)",
+          "oklch(55% 0.01072 136.56)",
+          "oklch(65% 0.01072 136.56)",
+          "oklch(80% 0.01072 136.56)",
+          "oklch(95% 0.01072 136.56)"
+        ]
+      },
+      "nav-text": {
+        "role": "neutral",
+        "displayName": "Navigation text",
+        "tonalRamp": [
+          "oklch(15% 0.01931 157.83)",
+          "oklch(25% 0.01931 157.83)",
+          "oklch(35% 0.01931 157.83)",
+          "oklch(45% 0.01931 157.83)",
+          "oklch(55% 0.01931 157.83)",
+          "oklch(65% 0.01931 157.83)",
+          "oklch(80% 0.01931 157.83)",
+          "oklch(95% 0.01931 157.83)"
+        ]
+      },
+      "nav-hover": {
+        "role": "primary",
+        "displayName": "Navigation hover",
+        "tonalRamp": [
+          "oklch(15% 0.05498 175.89)",
+          "oklch(25% 0.05498 175.89)",
+          "oklch(35% 0.05498 175.89)",
+          "oklch(45% 0.05498 175.89)",
+          "oklch(55% 0.05498 175.89)",
+          "oklch(65% 0.05498 175.89)",
+          "oklch(80% 0.05498 175.89)",
+          "oklch(95% 0.05498 175.89)"
+        ]
+      },
+      "nav-active": {
+        "role": "primary",
+        "displayName": "Current navigation",
+        "tonalRamp": [
+          "oklch(15% 0.05386 172.71)",
+          "oklch(25% 0.05386 172.71)",
+          "oklch(35% 0.05386 172.71)",
+          "oklch(45% 0.05386 172.71)",
+          "oklch(55% 0.05386 172.71)",
+          "oklch(65% 0.05386 172.71)",
+          "oklch(80% 0.05386 172.71)",
+          "oklch(95% 0.05386 172.71)"
+        ]
+      },
+      "red": {
+        "role": "semantic",
+        "displayName": "Destructive red",
+        "tonalRamp": [
+          "oklch(15% 0.14990 23.91)",
+          "oklch(25% 0.14990 23.91)",
+          "oklch(35% 0.14990 23.91)",
+          "oklch(45% 0.14990 23.91)",
+          "oklch(55% 0.14990 23.91)",
+          "oklch(65% 0.14990 23.91)",
+          "oklch(80% 0.14990 23.91)",
+          "oklch(95% 0.14990 23.91)"
+        ]
+      },
+      "red-hover": {
+        "role": "semantic",
+        "displayName": "Destructive hover",
+        "tonalRamp": [
+          "oklch(15% 0.13376 23.20)",
+          "oklch(25% 0.13376 23.20)",
+          "oklch(35% 0.13376 23.20)",
+          "oklch(45% 0.13376 23.20)",
+          "oklch(55% 0.13376 23.20)",
+          "oklch(65% 0.13376 23.20)",
+          "oklch(80% 0.13376 23.20)",
+          "oklch(95% 0.13376 23.20)"
+        ]
+      },
+      "control-surface": {
+        "role": "neutral",
+        "displayName": "Segment and status ground",
+        "tonalRamp": [
+          "oklch(15% 0.00901 134.87)",
+          "oklch(25% 0.00901 134.87)",
+          "oklch(35% 0.00901 134.87)",
+          "oklch(45% 0.00901 134.87)",
+          "oklch(55% 0.00901 134.87)",
+          "oklch(65% 0.00901 134.87)",
+          "oklch(80% 0.00901 134.87)",
+          "oklch(95% 0.00901 134.87)"
+        ]
+      },
+      "control-text": {
+        "role": "neutral",
+        "displayName": "Segment label",
+        "tonalRamp": [
+          "oklch(15% 0.03087 155.22)",
+          "oklch(25% 0.03087 155.22)",
+          "oklch(35% 0.03087 155.22)",
+          "oklch(45% 0.03087 155.22)",
+          "oklch(55% 0.03087 155.22)",
+          "oklch(65% 0.03087 155.22)",
+          "oklch(80% 0.03087 155.22)",
+          "oklch(95% 0.03087 155.22)"
+        ]
+      },
+      "status-text": {
+        "role": "neutral",
+        "displayName": "Neutral status text",
+        "tonalRamp": [
+          "oklch(15% 0.03803 151.64)",
+          "oklch(25% 0.03803 151.64)",
+          "oklch(35% 0.03803 151.64)",
+          "oklch(45% 0.03803 151.64)",
+          "oklch(55% 0.03803 151.64)",
+          "oklch(65% 0.03803 151.64)",
+          "oklch(80% 0.03803 151.64)",
+          "oklch(95% 0.03803 151.64)"
+        ]
+      },
+      "pending-surface": {
+        "role": "semantic",
+        "displayName": "Pending ground",
+        "tonalRamp": [
+          "oklch(15% 0.04442 93.10)",
+          "oklch(25% 0.04442 93.10)",
+          "oklch(35% 0.04442 93.10)",
+          "oklch(45% 0.04442 93.10)",
+          "oklch(55% 0.04442 93.10)",
+          "oklch(65% 0.04442 93.10)",
+          "oklch(80% 0.04442 93.10)",
+          "oklch(95% 0.04442 93.10)"
+        ]
+      },
+      "pending-text": {
+        "role": "semantic",
+        "displayName": "Pending text",
+        "tonalRamp": [
+          "oklch(15% 0.08441 83.97)",
+          "oklch(25% 0.08441 83.97)",
+          "oklch(35% 0.08441 83.97)",
+          "oklch(45% 0.08441 83.97)",
+          "oklch(55% 0.08441 83.97)",
+          "oklch(65% 0.08441 83.97)",
+          "oklch(80% 0.08441 83.97)",
+          "oklch(95% 0.08441 83.97)"
+        ]
+      },
+      "signed-surface": {
+        "role": "semantic",
+        "displayName": "Signed ground",
+        "tonalRamp": [
+          "oklch(15% 0.02104 147.63)",
+          "oklch(25% 0.02104 147.63)",
+          "oklch(35% 0.02104 147.63)",
+          "oklch(45% 0.02104 147.63)",
+          "oklch(55% 0.02104 147.63)",
+          "oklch(65% 0.02104 147.63)",
+          "oklch(80% 0.02104 147.63)",
+          "oklch(95% 0.02104 147.63)"
+        ]
+      },
+      "signed-text": {
+        "role": "semantic",
+        "displayName": "Signed text",
+        "tonalRamp": [
+          "oklch(15% 0.08850 148.71)",
+          "oklch(25% 0.08850 148.71)",
+          "oklch(35% 0.08850 148.71)",
+          "oklch(45% 0.08850 148.71)",
+          "oklch(55% 0.08850 148.71)",
+          "oklch(65% 0.08850 148.71)",
+          "oklch(80% 0.08850 148.71)",
+          "oklch(95% 0.08850 148.71)"
+        ]
+      },
+      "revoked-surface": {
+        "role": "semantic",
+        "displayName": "Revoked ground",
+        "tonalRamp": [
+          "oklch(15% 0.01338 28.87)",
+          "oklch(25% 0.01338 28.87)",
+          "oklch(35% 0.01338 28.87)",
+          "oklch(45% 0.01338 28.87)",
+          "oklch(55% 0.01338 28.87)",
+          "oklch(65% 0.01338 28.87)",
+          "oklch(80% 0.01338 28.87)",
+          "oklch(95% 0.01338 28.87)"
+        ]
+      },
+      "revoked-text": {
+        "role": "semantic",
+        "displayName": "Revoked text",
+        "tonalRamp": [
+          "oklch(15% 0.09216 27.18)",
+          "oklch(25% 0.09216 27.18)",
+          "oklch(35% 0.09216 27.18)",
+          "oklch(45% 0.09216 27.18)",
+          "oklch(55% 0.09216 27.18)",
+          "oklch(65% 0.09216 27.18)",
+          "oklch(80% 0.09216 27.18)",
+          "oklch(95% 0.09216 27.18)"
+        ]
+      },
+      "icon-hover": {
+        "role": "neutral",
+        "displayName": "Icon action hover",
+        "tonalRamp": [
+          "oklch(15% 0.01191 145.48)",
+          "oklch(25% 0.01191 145.48)",
+          "oklch(35% 0.01191 145.48)",
+          "oklch(45% 0.01191 145.48)",
+          "oklch(55% 0.01191 145.48)",
+          "oklch(65% 0.01191 145.48)",
+          "oklch(80% 0.01191 145.48)",
+          "oklch(95% 0.01191 145.48)"
+        ]
+      },
+      "drawing-line": {
+        "role": "neutral",
+        "displayName": "Drawing surface edge",
+        "tonalRamp": [
+          "oklch(15% 0.02326 151.58)",
+          "oklch(25% 0.02326 151.58)",
+          "oklch(35% 0.02326 151.58)",
+          "oklch(45% 0.02326 151.58)",
+          "oklch(55% 0.02326 151.58)",
+          "oklch(65% 0.02326 151.58)",
+          "oklch(80% 0.02326 151.58)",
+          "oklch(95% 0.02326 151.58)"
+        ]
+      },
+      "baseline": {
+        "role": "neutral",
+        "displayName": "Drawing baseline",
+        "tonalRamp": [
+          "oklch(15% 0.02204 143.20)",
+          "oklch(25% 0.02204 143.20)",
+          "oklch(35% 0.02204 143.20)",
+          "oklch(45% 0.02204 143.20)",
+          "oklch(55% 0.02204 143.20)",
+          "oklch(65% 0.02204 143.20)",
+          "oklch(80% 0.02204 143.20)",
+          "oklch(95% 0.02204 143.20)"
+        ]
+      },
+      "drawing-placeholder": {
+        "role": "neutral",
+        "displayName": "Drawing prompt",
+        "tonalRamp": [
+          "oklch(15% 0.03209 151.46)",
+          "oklch(25% 0.03209 151.46)",
+          "oklch(35% 0.03209 151.46)",
+          "oklch(45% 0.03209 151.46)",
+          "oklch(55% 0.03209 151.46)",
+          "oklch(65% 0.03209 151.46)",
+          "oklch(80% 0.03209 151.46)",
+          "oklch(95% 0.03209 151.46)"
+        ]
+      },
+      "signature-black": {
+        "role": "content",
+        "displayName": "Black signature ink",
+        "tonalRamp": [
+          "oklch(15% 0.04078 245.54)",
+          "oklch(25% 0.04078 245.54)",
+          "oklch(35% 0.04078 245.54)",
+          "oklch(45% 0.04078 245.54)",
+          "oklch(55% 0.04078 245.54)",
+          "oklch(65% 0.04078 245.54)",
+          "oklch(80% 0.04078 245.54)",
+          "oklch(95% 0.04078 245.54)"
+        ]
+      },
+      "signature-blue": {
+        "role": "content",
+        "displayName": "Blue signature ink",
+        "tonalRamp": [
+          "oklch(15% 0.13804 259.90)",
+          "oklch(25% 0.13804 259.90)",
+          "oklch(35% 0.13804 259.90)",
+          "oklch(45% 0.13804 259.90)",
+          "oklch(55% 0.13804 259.90)",
+          "oklch(65% 0.13804 259.90)",
+          "oklch(80% 0.13804 259.90)",
+          "oklch(95% 0.13804 259.90)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Authentication display",
+        "purpose": "The authentication introduction; responsive sizes remain documented in DESIGN.md."
+      },
+      "headline": {
+        "displayName": "Page heading",
+        "purpose": "The default workspace page heading, with contextual editor and responsive overrides."
+      },
+      "title": {
+        "displayName": "Section title",
+        "purpose": "Panel and section headings; compact card and inspector overrides remain local."
+      },
+      "body": {
+        "displayName": "Body and values",
+        "purpose": "General reading and field values, capped at 70ch for ordinary paragraphs."
+      },
+      "label": {
+        "displayName": "Field and text action",
+        "purpose": "Visible field labels and compact text actions."
+      },
+      "button": {
+        "displayName": "Main button",
+        "purpose": "Primary, secondary, and destructive controls."
+      },
+      "metadata": {
+        "displayName": "Record metadata",
+        "purpose": "Dates, source labels, and supporting record detail."
+      },
+      "status": {
+        "displayName": "Written state",
+        "purpose": "Compact passive document status labels."
+      }
+    },
+    "shadows": [
+      {
+        "name": "pdf-paper",
+        "value": "0 4px 14px #23432a1a",
+        "purpose": "The only box shadow in the stylesheet; anchors actual PDF paper on its work area."
+      }
+    ],
+    "motion": [
+      {
+        "name": "button-color",
+        "value": "background-color 0.16s, color 0.16s",
+        "purpose": "Enabled main-button state changes, using the CSS default ease timing."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }",
+        "purpose": "Removes transitions and smooth scrolling when reduced motion is requested."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "wide-min",
+        "value": "1600px"
+      },
+      {
+        "name": "compact-max",
+        "value": "1200px"
+      },
+      {
+        "name": "header-max",
+        "value": "900px"
+      },
+      {
+        "name": "mobile-max",
+        "value": "680px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The main enabled action for the current task.",
+      "html": "<button type=\"button\" class=\"ds-button-primary\">Save signature</button>",
+      "css": ".ds-button-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid transparent;border-radius:8px;min-height:43px;padding:10px 16px;text-decoration:none;font-family:\"DM Sans Variable\", sans-serif;font-weight:570;font-size:14px;line-height:1.5;white-space:nowrap;cursor:pointer;transition:background-color .16s,color .16s;background:var(--green,#163f38);color:#fff;}.ds-button-primary:hover:not(:disabled){background:var(--green-hover,#22584d);}.ds-button-primary:focus-visible{outline:3px solid var(--focus,#337e66);outline-offset:4px;}.ds-button-primary:disabled{cursor:not-allowed;opacity:.48;}@media(prefers-reduced-motion:reduce){.ds-button-primary{transition:none;}}"
+    },
+    {
+      "name": "Secondary button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "A bordered alternative to the main action.",
+      "html": "<button type=\"button\" class=\"ds-button-secondary\">Cancel</button>",
+      "css": ".ds-button-secondary{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid transparent;border-radius:8px;min-height:43px;padding:10px 16px;text-decoration:none;font-family:\"DM Sans Variable\", sans-serif;font-weight:570;font-size:14px;line-height:1.5;white-space:nowrap;cursor:pointer;transition:background-color .16s,color .16s;background:#fff;color:var(--green,#163f38);border-color:#c7d3c9;}.ds-button-secondary:hover:not(:disabled){background:var(--soft,#edf3ed);}.ds-button-secondary:focus-visible{outline:3px solid var(--focus,#337e66);outline-offset:4px;}.ds-button-secondary:disabled{cursor:not-allowed;opacity:.48;}@media(prefers-reduced-motion:reduce){.ds-button-secondary{transition:none;}}"
+    },
+    {
+      "name": "Danger button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "The explicit removal action after confirmation.",
+      "html": "<button type=\"button\" class=\"ds-button-danger\">Remove signature</button>",
+      "css": ".ds-button-danger{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid transparent;border-radius:8px;min-height:43px;padding:10px 16px;text-decoration:none;font-family:\"DM Sans Variable\", sans-serif;font-weight:570;font-size:14px;line-height:1.5;white-space:nowrap;cursor:pointer;transition:background-color .16s,color .16s;background:var(--red,#a12f31);color:#fff;}.ds-button-danger:hover:not(:disabled){background:#852226;}.ds-button-danger:focus-visible{outline:3px solid var(--focus,#337e66);outline-offset:4px;}.ds-button-danger:disabled{cursor:not-allowed;opacity:.48;}@media(prefers-reduced-motion:reduce){.ds-button-danger{transition:none;}}"
+    },
+    {
+      "name": "Icon button",
+      "kind": "button",
+      "refersTo": "button-icon",
+      "description": "A compact named action, shown as the composer close control.",
+      "html": "<button type=\"button\" class=\"ds-icon-button\" aria-label=\"Close new signature\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M18 6 6 18\"/><path d=\"m6 6 12 12\"/></svg></button>",
+      "css": ".ds-icon-button{display:inline-flex;align-items:center;justify-content:center;min-width:36px;min-height:36px;border:0;background:transparent;color:var(--ink,#243b32);border-radius:7px;padding:8px;cursor:pointer;}.ds-icon-button:hover:not(:disabled){background:#e7eee7;}.ds-icon-button:focus-visible{outline:3px solid var(--focus,#337e66);outline-offset:4px;}.ds-icon-button:disabled{cursor:not-allowed;opacity:.48;}"
+    },
+    {
+      "name": "Text button",
+      "kind": "button",
+      "refersTo": "button-text",
+      "description": "Low-emphasis inline actions such as Cancel, Undo, and Clear.",
+      "html": "<button type=\"button\" class=\"ds-text-button\">Cancel</button>",
+      "css": ".ds-text-button{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;padding:5px 0;background:transparent;color:var(--green,#163f38);font-family:\"DM Sans Variable\", sans-serif;font-size:13px;font-weight:570;line-height:1.5;text-decoration:none;cursor:pointer;}.ds-text-button:hover:not(:disabled){text-decoration:underline;text-underline-offset:4px;}.ds-text-button:focus-visible{outline:3px solid var(--focus,#337e66);outline-offset:4px;}.ds-text-button:disabled{cursor:not-allowed;opacity:.48;}"
+    },
+    {
+      "name": "Labeled input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "A regular-weight value beneath a compact visible label.",
+      "html": "<label class=\"ds-field\">Signature name<input class=\"ds-input\" type=\"text\" value=\"My signature\" maxlength=\"80\" autocomplete=\"off\"></label>",
+      "css": ".ds-field{display:flex;flex-direction:column;gap:7px;font-family:\"DM Sans Variable\", sans-serif;font-size:13px;font-weight:570;line-height:1.5;color:var(--ink,#243b32);}.ds-input{min-width:0;max-width:100%;border:1px solid #b9c8bc;border-radius:7px;background:#fff;color:var(--ink,#243b32);padding:10px 12px;font-family:\"DM Sans Variable\", sans-serif;font-size:15px;line-height:1.5;font-weight:400;caret-color:var(--green,#163f38);}.ds-input::placeholder{color:#66776c;}.ds-input:focus-visible{outline:3px solid var(--focus,#337e66);outline-offset:4px;}"
+    },
+    {
+      "name": "Workspace navigation",
+      "kind": "nav",
+      "refersTo": "navigation-link",
+      "description": "The two source navigation links in their deep green desktop context.",
+      "html": "<nav class=\"ds-navigation\" aria-label=\"Main navigation\"><a class=\"ds-nav-link ds-nav-current\" href=\"#documents\" aria-current=\"page\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z\"/><path d=\"M14 2v5a1 1 0 0 0 1 1h5\"/><path d=\"M10 9H8\"/><path d=\"M16 13H8\"/><path d=\"M16 17H8\"/></svg>Documents</a><a class=\"ds-nav-link\" href=\"#signatures\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M13 21h8\"/><path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\"/></svg>My signatures</a></nav>",
+      "css": ".ds-navigation{display:flex;flex-direction:column;gap:8px;background:var(--green,#163f38);padding:22px;color:#fff;font-family:\"DM Sans Variable\", sans-serif;font-size:15px;line-height:1.5;}.ds-nav-link{display:flex;align-items:center;gap:12px;color:#d1dfd6;text-decoration:none;padding:12px 14px;border-radius:8px;font-weight:520;}.ds-nav-link svg{flex-shrink:0;}.ds-nav-link:hover{background:#235247;}.ds-nav-link.ds-nav-current{background:#346053;color:#fff;}.ds-nav-link:focus-visible{outline:3px solid var(--focus,#337e66);outline-offset:4px;}"
+    },
+    {
+      "name": "Written status chips",
+      "kind": "chip",
+      "refersTo": "status",
+      "description": "Passive document states; color is accompanied by a written label.",
+      "html": "<div class=\"ds-status-row\"><span class=\"ds-status\">Draft</span><span class=\"ds-status ds-status-pending\">Pending</span><span class=\"ds-status ds-status-signed\">Signed</span><span class=\"ds-status ds-status-revoked\">Revoked</span></div>",
+      "css": ".ds-status-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}.ds-status{display:inline-flex;align-items:center;justify-content:center;border-radius:5px;padding:4px 8px;font-family:\"DM Sans Variable\", sans-serif;font-size:11px;line-height:1.4;background:#edf1eb;color:#4c6251;white-space:nowrap;text-transform:capitalize;}.ds-status-pending{background:#f9efce;color:#73581b;}.ds-status-signed{background:#e5f2e6;color:#30653b;}.ds-status-revoked{background:#f3e7e5;color:#8c4942;}"
+    },
+    {
+      "name": "Flat panel",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "The standard white bordered container, shown with the signature composer heading.",
+      "html": "<section class=\"ds-panel\" aria-label=\"New signature\"><h2 class=\"ds-panel-title\">New signature</h2><p class=\"ds-panel-copy\">Save it to your account and use it on any document.</p></section>",
+      "css": ".ds-panel{background:#fff;border:1px solid var(--line,#dce3dc);border-radius:var(--radius,12px);padding:25px;color:var(--ink,#243b32);font-family:\"DM Sans Variable\", sans-serif;line-height:1.5;}.ds-panel-title{margin:0;font-size:21px;font-weight:620;line-height:1.35;letter-spacing:-.02em;}.ds-panel-copy{margin:3px 0 22px;color:var(--muted,#586a60);font-size:14px;max-width:70ch;}"
+    },
+    {
+      "name": "Signature drawing surface",
+      "kind": "custom",
+      "refersTo": "signature-input",
+      "description": "Static preview of the real empty drawing state and selected method; drawing and mode switching require the Vue component.",
+      "html": "<div class=\"ds-signature-input\"><div class=\"ds-segmented\" aria-label=\"Signature method\"><button type=\"button\" class=\"ds-segment ds-segment-selected\" aria-pressed=\"true\">Draw</button><button type=\"button\" class=\"ds-segment\" aria-pressed=\"false\">Upload PNG</button></div><div class=\"ds-drawing-surface\" role=\"img\" aria-label=\"Empty signature drawing surface\"><span class=\"ds-drawing-placeholder\">Draw your signature here</span><span class=\"ds-drawing-baseline\" aria-hidden=\"true\"></span></div><p class=\"ds-drawing-hint\">Use your mouse, finger, or pen. Prefer a file? Choose Upload PNG.</p></div>",
+      "css": ".ds-signature-input{font-family:\"DM Sans Variable\", sans-serif;color:var(--ink,#243b32);line-height:1.5;}.ds-segmented{display:flex;align-items:center;gap:3px;background:#edf1eb;border-radius:8px;padding:4px;margin-bottom:18px;}.ds-segment{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;background:transparent;border:0;border-radius:5px;padding:8px 10px;font-family:\"DM Sans Variable\", sans-serif;font-size:13px;color:#536659;font-weight:570;line-height:1.5;min-height:36px;cursor:pointer;}.ds-segment.ds-segment-selected{background:#fff;color:var(--green,#163f38);}.ds-segment:focus-visible{outline:3px solid var(--focus,#337e66);outline-offset:4px;}.ds-drawing-surface{position:relative;background:#fff;border:1px solid #bbcabe;border-radius:8px;height:202px;overflow:hidden;}.ds-drawing-placeholder{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;color:#66796a;font-size:16px;}.ds-drawing-baseline{position:absolute;bottom:40px;left:24px;right:24px;border-bottom:1px dashed #c4d0c3;pointer-events:none;}.ds-drawing-hint{font-size:13px;color:var(--muted,#586a60);line-height:1.55;margin:8px 0 0;max-width:70ch;}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Restrained correspondence stationery",
+    "overview": "PaperSign is a quiet working space for documents and reusable visual signatures. Deep green navigation establishes the workspace, pale green-gray grounds separate work areas, and white paper carries the document itself. The signature is the distinctive visual content; the surrounding interface stays practical and legible.\n\nThe implementation uses one variable sans family, compact controls, restrained corners, and mostly flat surfaces. The same contained signature specimen appears in the private library and editor or recipient chooser. The interface supports both pointer and keyboard work, with visible focus, explicit consent, and a direct PDF review link before recipient signing.",
+    "keyCharacteristics": [
+      "Deep green navigation and action emphasis over pale work areas.",
+      "White document paper and real user-supplied signature artwork.",
+      "DM Sans hierarchy with compact, sentence-case controls.",
+      "Flat bordered panels, with a soft shadow reserved for PDF paper.",
+      "Responsive navigation that retains the signed-in account identity."
+    ],
+    "rules": [],
+    "dos": [
+      "Do retain the deep green shell, white document paper, and quiet green-gray work areas.",
+      "Do show actual signature artwork with containment and preserve the complete stroke shape.",
+      "Do use the bundled DM Sans hierarchy and visible written status labels.",
+      "Do keep keyboard focus, the signed-in identity, and the PDF review link visible through responsive changes.",
+      "Do keep recipient consent and the final signing action explicit.",
+      "Do use genuine empty states before the account has signatures or documents."
+    ],
+    "donts": [
+      "Don't turn signature blue into a competing interface accent.",
+      "Don't spread the PDF paper shadow to ordinary cards and controls.",
+      "Don't replace real signature specimens with decorative mock handwriting or invented customer documents.",
+      "Don't hide the current account identity on mobile.",
+      "Don't treat the canvas-only PDF preview as an accessible text document.",
+      "Don't promote constrained 8px or 10px annotations into reusable body or instruction styles."
+    ]
+  }
+}

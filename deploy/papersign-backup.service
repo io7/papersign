@@ -1,0 +1,10 @@
+[Unit]
+Description=PaperSign consistent PostgreSQL backup for CT snapshots
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=postgres
+UMask=0077
+ExecStart=/bin/sh -c 'pg_dump -Fc papersign > /var/lib/postgresql/papersign.dump.new && mv /var/lib/postgresql/papersign.dump.new /var/lib/postgresql/papersign.dump'
+Nice=10

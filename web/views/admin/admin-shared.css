@@ -1,0 +1,232 @@
+/* Forms and record rows shared by the Admin sections. Each section includes
+   this file with <style scoped src>, so the rules stay scoped to it. */
+.admin-page select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23243b32' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-position: right 12px center;
+  background-repeat: no-repeat;
+  background-size: 16px 16px;
+  padding-right: 36px;
+}
+.admin-invite-form {
+  margin: -24px -24px 24px;
+  padding: 22px 24px 24px;
+  background: #fafcf8;
+  border-bottom: 1px solid var(--line);
+}
+.admin-invite-form:not(:first-child) {
+  margin-top: 0;
+}
+.admin-invite-form h2 {
+  font-size: 18px;
+}
+.admin-invite-form > p {
+  margin: 6px 0 18px;
+  font-size: 13px;
+  max-width: 76ch;
+}
+.invite-fields {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) minmax(180px, 1.3fr) 100px auto;
+  gap: 14px;
+  align-items: end;
+}
+.invite-fields .field,
+.key-fields .field,
+.admin-role-controls .field {
+  margin: 0;
+}
+.key-fields {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 150px auto;
+  gap: 14px;
+  align-items: end;
+  max-width: 720px;
+}
+.api-key-secret {
+  max-width: 720px;
+  margin-top: 20px;
+  padding: 16px 18px;
+  background: var(--paper);
+  border: 1px solid var(--green);
+  border-radius: 8px;
+}
+.api-key-secret h3 {
+  font-size: 15px;
+  font-weight: 620;
+}
+.api-key-secret > p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.api-key-secret .copy-field {
+  margin-top: 14px;
+}
+.api-key-secret .button-row {
+  margin-top: 10px;
+  gap: 10px;
+}
+.api-key-prefix {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+/* Keeps the column width when a revoked key has no action. */
+.admin-key-action {
+  justify-self: end;
+  min-width: 64px;
+  text-align: right;
+}
+.admin-record {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 24px;
+  padding: 22px 0;
+  border-bottom: 1px solid var(--line);
+}
+.admin-record-main,
+.admin-record-metadata {
+  min-width: 0;
+}
+.admin-record h3 {
+  font-size: 15px;
+  font-weight: 620;
+  overflow-wrap: anywhere;
+}
+.admin-record p {
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.admin-record .hint {
+  font-size: 13px;
+  margin-top: 6px;
+}
+.admin-record .status {
+  display: inline-block;
+  margin-bottom: 3px;
+  font-size: 12px;
+}
+.admin-record-metadata > .text-button {
+  padding: 0;
+}
+.admin-role-controls {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+}
+.admin-role-controls select {
+  min-width: 100px;
+}
+.admin-document-action {
+  justify-self: end;
+}
+.invitation-record {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.75fr) minmax(320px, 1.4fr);
+}
+.invitation-actions {
+  min-width: 0;
+}
+.invitation-actions .button-row {
+  gap: 10px;
+  margin-top: 12px;
+}
+@media (forced-colors: active) {
+  .admin-page select {
+    appearance: auto;
+    background-image: none;
+    padding-right: 12px;
+  }
+}
+@media (max-width: 1200px) {
+  .invite-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+  .invite-fields > button {
+    justify-self: start;
+  }
+}
+@media (min-width: 681px) and (max-width: 1100px) {
+  .admin-record {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 12px 24px;
+  }
+  .admin-record-metadata {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .admin-role-controls,
+  .admin-document-action,
+  .admin-key-action,
+  .invitation-actions {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+  .invitation-actions {
+    width: 320px;
+  }
+}
+@media (max-width: 680px) {
+  .admin-invite-form {
+    margin: -18px -16px 20px;
+    padding: 18px 16px 20px;
+  }
+  .admin-invite-form > p {
+    margin-bottom: 14px;
+  }
+  .invite-fields {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+    gap: 12px;
+  }
+  .invite-fields > .field:nth-child(-n + 2) {
+    grid-column: 1 / -1;
+  }
+  .invite-fields > button {
+    width: 100%;
+    padding-inline: 10px;
+  }
+  .key-fields {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px;
+  }
+  .key-fields > .field:first-child {
+    grid-column: 1 / -1;
+  }
+  .api-key-secret {
+    padding: 14px;
+  }
+  .admin-key-action {
+    justify-self: start;
+    min-width: 0;
+    padding-inline: 0;
+  }
+  span.admin-key-action {
+    display: none;
+  }
+  .admin-record {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 14px;
+    padding: 20px 0;
+  }
+  .admin-role-controls {
+    justify-content: space-between;
+  }
+  .admin-role-controls .field {
+    flex: 1;
+  }
+  .admin-document-action {
+    justify-self: start;
+  }
+}
+@media (max-width: 380px) {
+  .invite-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .invite-fields > button {
+    justify-self: stretch;
+  }
+}

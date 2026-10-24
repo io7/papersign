@@ -1,0 +1,183 @@
+# PaperSign with Docker Compose. Quick start (see docs/self-hosting.md):
+#   cd docker && cp .env.example .env   # then fill in .env
+#   docker compose up -d
+# Profiles, chosen with --profile or COMPOSE_PROFILES in .env:
+#   https    Caddy on ports 80 and 443 with an automatic certificate.
+#   try-out  a local mailbox at http://HOST:8025 that captures every email.
+name: papersign
+
+x-app: &app
+  image: ${PAPERSIGN_IMAGE:-ghcr.io/io7/papersign:0.7.0}
+  build:
+    context: ..
+    dockerfile: Dockerfile
+  restart: unless-stopped
+  read_only: true
+  tmpfs:
+    - /tmp:size=512m,mode=1777
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  environment: &app-env
+    DATABASE_URL: postgres://papersign:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/papersign
+    BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env}
+    APP_URL: ${APP_URL:?Set APP_URL in .env}
+    TRUSTED_PROXY: ${TRUSTED_PROXY:-}
+    REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-true}
+    OPERATOR_NAME: ${OPERATOR_NAME:-}
+    SMTP_HOST: ${SMTP_HOST:-}
+    SMTP_PORT: ${SMTP_PORT:-587}
+    SMTP_SECURE: ${SMTP_SECURE:-false}
+    SMTP_REQUIRE_TLS: ${SMTP_REQUIRE_TLS:-true}
+    SMTP_USER: ${SMTP_USER:-}
+    SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+    SMTP_FROM: ${SMTP_FROM:-}
+    ACCOUNT_STORAGE_LIMIT_BYTES: ${ACCOUNT_STORAGE_LIMIT_BYTES:-524288000}
+    MAX_ACTIVE_EXPORTS: ${MAX_ACTIVE_EXPORTS:-3}
+    DELETION_GRACE_DAYS: ${DELETION_GRACE_DAYS:-30}
+    DELETION_APPROVAL_REQUIRED: ${DELETION_APPROVAL_REQUIRED:-false}
+    ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+  volumes:
+    - data:/data
+    - backups:/backups:ro
+  networks:
+    - internal
+
+services:
+  postgres:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: papersign
+      POSTGRES_USER: papersign
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U papersign -d papersign"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  # Applies database migrations, then exits. Web and worker wait for it.
+  migrate:
+    <<: *app
+    command: ["migrate"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    <<: *app
+    command: ["web"]
+    ports:
+      - "${PAPERSIGN_BIND:-127.0.0.1}:${PAPERSIGN_PORT:-3176}:3176"
+    mem_limit: 1536m
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "papersign", "healthcheck"]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  worker:
+    <<: *app
+    command: ["worker"]
+    mem_limit: 1536m
+    stop_grace_period: 9m
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  # Hourly consistent database dump into the backups volume. Admin →
+  # Operations reports when it is older than three hours.
+  backup:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGUSER: papersign
+      PGDATABASE: papersign
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        umask 0027
+        while true; do
+          if pg_dump -Fc > /backups/papersign.dump.new; then
+            mv /backups/papersign.dump.new /backups/papersign.dump
+          else
+            echo "PaperSign database backup failed" >&2
+          fi
+          sleep 3600
+        done
+    volumes:
+      - backups:/backups
+    # The image declares a data volume this service never uses; an in-memory
+    # mount stops Docker from leaving an empty volume behind on each restart.
+    tmpfs:
+      - /var/lib/postgresql/data
+    networks:
+      - internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Optional HTTPS in front of the web service. The host in APP_URL must point
+  # at this server, with ports 80 and 443 reachable from the internet.
+  caddy:
+    image: caddy:2.11-alpine
+    profiles: ["https"]
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    environment:
+      APP_URL: ${APP_URL:?Set APP_URL in .env}
+      CADDY_GLOBAL_OPTIONS: ${CADDY_GLOBAL_OPTIONS:-}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - internal
+    depends_on:
+      - web
+
+  # Try-out only: captures all mail. Never use it for real signers.
+  mailpit:
+    image: axllent/mailpit:v1.27
+    profiles: ["try-out"]
+    restart: unless-stopped
+    ports:
+      - "${MAILPIT_BIND:-127.0.0.1}:8025:8025"
+    networks:
+      - internal
+
+volumes:
+  postgres:
+  data:
+  backups:
+  caddy-data:
+  caddy-config:
+
+networks:
+  internal:

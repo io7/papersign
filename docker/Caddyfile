@@ -1,0 +1,21 @@
+# HTTPS for PaperSign, started by the compose profile "https". Caddy serves the
+# address in APP_URL and obtains and renews its certificate by itself.
+{
+	# Optional extra global options from .env, such as `email you@example.com`.
+	{$CADDY_GLOBAL_OPTIONS}
+
+	# Signing and invitation links carry private tokens in the address, and
+	# pages opened from them send it on as Referer. Caddy writes no access log
+	# here; this keeps both out of its error log as well.
+	log default {
+		format filter {
+			request>uri delete
+			request>headers delete
+			wrap json
+		}
+	}
+}
+
+{$APP_URL} {
+	reverse_proxy web:3176
+}

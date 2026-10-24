@@ -1,0 +1,1 @@
+ALTER TABLE "document_export" ADD COLUMN "evidence_complete" boolean DEFAULT true NOT NULL;

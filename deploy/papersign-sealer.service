@@ -1,0 +1,34 @@
+[Unit]
+Description=PaperSign isolated Node certificate sealer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=papersign-sealer
+Group=papersign
+WorkingDirectory=/opt/papersign/current
+Environment=SEAL_SOCKET=/run/papersign-sealer/sealer.sock
+LoadCredential=seal-policy.json:/etc/papersign/sealing/policy.json
+LoadCredential=seal.p12:/etc/papersign/sealing/seal.p12
+LoadCredential=seal-password:/etc/papersign/sealing/password
+ExecStart=/opt/node/bin/node --max-old-space-size=384 dist-server/server/sealer.js
+RuntimeDirectory=papersign-sealer
+RuntimeDirectoryMode=0750
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectProc=invisible
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryMax=2048M
+TasksMax=100
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

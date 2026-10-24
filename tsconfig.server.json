@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "outDir": "dist-server",
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  "include": [
+    "server/**/*.ts",
+    "shared/**/*.ts",
+    "scripts/bootstrap-admin.ts",
+    "scripts/delete-document.ts",
+    "scripts/verify-evidence.ts",
+    "scripts/verify-evidence-timestamp.ts",
+    "scripts/timestamp-evidence.ts"
+  ]
+}

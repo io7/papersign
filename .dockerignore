@@ -1,0 +1,16 @@
+# Keep secrets, local data and build output out of the build context.
+.git
+.env
+.env.*
+!.env.example
+.local
+node_modules
+dist
+dist-server
+public/pdfjs
+test-results
+playwright-report
+.impeccable
+.venv
+docker/.env
+**/*.log

@@ -1,0 +1,12 @@
+#!/usr/sbin/nft -f
+# Dedicated host: only the HTTPS reverse proxy may reach the application port.
+# Set proxy to your reverse proxy's address before loading.
+define proxy = 192.0.2.10
+table inet papersign {
+  chain input {
+    type filter hook input priority 0; policy accept;
+    iifname "lo" accept
+    ip saddr $proxy tcp dport 3176 accept
+    tcp dport 3176 drop
+  }
+}

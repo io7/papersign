@@ -1,0 +1,28 @@
+[Unit]
+Description=PaperSign web application
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+User=papersign
+Group=papersign
+WorkingDirectory=/opt/papersign/current
+EnvironmentFile=/etc/papersign/papersign.env
+ExecStart=/opt/node/bin/node --max-old-space-size=768 dist-server/server/index.js
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/papersign
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+MemoryMax=1536M
+TasksMax=100
+TimeoutStopSec=35
+
+[Install]
+WantedBy=multi-user.target

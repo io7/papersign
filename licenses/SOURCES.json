@@ -1,0 +1,115 @@
+[
+  {
+    "name": "@libpdf/core",
+    "version": "0.5.3",
+    "source": "node_modules/@libpdf/core/LICENSE.md",
+    "copy": "licenses/libpdf-core-0.5.3/LICENSE.md",
+    "sha256": "780f927ddc7dd12f9f2906d0edd26f0474f71d7602d5704c13f1e482b7702821"
+  },
+  {
+    "name": "@noble/ciphers",
+    "version": "2.4.0",
+    "source": "node_modules/@noble/ciphers/LICENSE",
+    "copy": "licenses/noble-ciphers-2.4.0/LICENSE",
+    "sha256": "f36671a5487c9c5050efacb58011c37c24c55a889803cb036cf9d9a6347c1e2d"
+  },
+  {
+    "name": "@noble/hashes",
+    "version": "2.4.0",
+    "source": "node_modules/@noble/hashes/LICENSE",
+    "copy": "licenses/noble-hashes-2.4.0/LICENSE",
+    "sha256": "4f221aee6e072336700c408c68ab3b96a3fc09f6aebe6f48f1bd99e5ef13faec"
+  },
+  {
+    "name": "@scure/base",
+    "version": "2.4.0",
+    "source": "node_modules/@scure/base/LICENSE",
+    "copy": "licenses/scure-base-2.4.0/LICENSE",
+    "sha256": "3239e134eb6e6d64538ca76498c7fcb08a395249dd9d4af9927bf6d0169ee429"
+  },
+  {
+    "name": "asn1js",
+    "version": "3.1.0",
+    "source": "node_modules/asn1js/LICENSE",
+    "copy": "licenses/asn1js-3.1.0/LICENSE",
+    "sha256": "ebe5d98519d0dfcbcb80e20b22a56e7321e8557cd14355760434bbd4c1f4f683"
+  },
+  {
+    "name": "pvtsutils",
+    "version": "1.3.6",
+    "source": "node_modules/pvtsutils/LICENSE",
+    "copy": "licenses/pvtsutils-1.3.6/LICENSE",
+    "sha256": "c620c1d08a47c93ce242914a4269b86e41df5a97845325725a5f83d5d6f9d7fd"
+  },
+  {
+    "name": "tslib",
+    "version": "2.8.1",
+    "source": "node_modules/pkijs/node_modules/tslib/CopyrightNotice.txt",
+    "copy": "licenses/tslib-2.8.1/CopyrightNotice.txt",
+    "sha256": "da16ddb65f8ca390998fb99223d0112498b56b45784d00afd77ff8ce1ac4de8b"
+  },
+  {
+    "name": "tslib",
+    "version": "2.8.1",
+    "source": "node_modules/pkijs/node_modules/tslib/LICENSE.txt",
+    "copy": "licenses/tslib-2.8.1/LICENSE.txt",
+    "sha256": "210b19e543130388c68654b7497e967119ce17145f66ab7d85688fbd70f08751"
+  },
+  {
+    "name": "pvutils",
+    "version": "1.2.0",
+    "source": "node_modules/pvutils/LICENSE",
+    "copy": "licenses/pvutils-1.2.0/LICENSE",
+    "sha256": "15c88630f1e778db64a446cb31b67362cc9eb7a048fdf5ac7ab51905b74464cd"
+  },
+  {
+    "name": "lru-cache",
+    "version": "11.5.3",
+    "source": "node_modules/lru-cache/LICENSE.md",
+    "copy": "licenses/lru-cache-11.5.3/LICENSE.md",
+    "sha256": "8a1af140fdfbf5afd3df27f7e662f989c5b963a300020dfafce42033cae9e004"
+  },
+  {
+    "name": "pako",
+    "version": "2.2.0",
+    "source": "node_modules/@libpdf/core/node_modules/pako/LICENSE",
+    "copy": "licenses/pako-2.2.0/LICENSE",
+    "sha256": "a04665b3b2de56c66730c1f720f528175739e4104f79073614aa611da1e85539"
+  },
+  {
+    "name": "pkijs",
+    "version": "3.4.3",
+    "source": "node_modules/pkijs/LICENSE",
+    "copy": "licenses/pkijs-3.4.3/LICENSE",
+    "sha256": "d27a2aa238102924ea75da808f79253484347d824b9b7b077837e4232f9493f5"
+  },
+  {
+    "name": "@noble/hashes",
+    "version": "1.8.0",
+    "source": "node_modules/pkijs/node_modules/@noble/hashes/LICENSE",
+    "copy": "licenses/noble-hashes-1.8.0/LICENSE",
+    "sha256": "4f221aee6e072336700c408c68ab3b96a3fc09f6aebe6f48f1bd99e5ef13faec"
+  },
+  {
+    "name": "bytestreamjs",
+    "version": "2.0.1",
+    "source": "node_modules/bytestreamjs/LICENSE",
+    "copy": "licenses/bytestreamjs-2.0.1/LICENSE",
+    "sha256": "f0fd6a4bf9bf46cfcea2005f800305fbb72cd0152b3c269cf496388258ee08f9"
+  },
+  {
+    "source": "https://raw.githubusercontent.com/LibPDF-js/core/6bb53b8c7574c1a91992812bcfca8121a11eace8/src/fontbox/LICENSE.md",
+    "copy": "licenses/libpdf-fontbox-0.5.3-LICENSE.md",
+    "sha256": "614463316e5297b7b9eff36d251f03c1c269e5bae7243f11a7ace98f453c2a7a"
+  },
+  {
+    "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+    "copy": "licenses/Apache-2.0.txt",
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+  },
+  {
+    "source": "https://raw.githubusercontent.com/apache/pdfbox/b6c88b8a4252f10a23593907e3439d168877de0e/NOTICE.txt",
+    "copy": "licenses/apache-pdfbox-NOTICE.txt",
+    "sha256": "40741b4ab76d77ba4fbc5e8759277169fb0ce281859d273075de6fd3a3588458"
+  }
+]

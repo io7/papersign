@@ -1,0 +1,18 @@
+[Unit]
+Description=PaperSign worker, storage, backup and HTTPS checks
+After=postgresql.service papersign-web.service papersign-worker.service
+
+[Service]
+Type=oneshot
+TimeoutStartSec=60
+User=papersign
+Group=papersign
+WorkingDirectory=/opt/papersign/current
+EnvironmentFile=/etc/papersign/papersign.env
+ExecStart=/opt/node/bin/node dist-server/server/monitor.js
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/papersign
+UMask=0077

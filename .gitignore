@@ -1,0 +1,13 @@
+node_modules/
+dist/
+dist-server/
+.env
+.env.*
+!.env.example
+.local/
+.venv/
+test-results/
+playwright-report/
+.impeccable/review/
+public/pdfjs/
+REVISION

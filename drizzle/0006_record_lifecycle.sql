@@ -1,0 +1,6 @@
+ALTER TABLE "user" ADD COLUMN "deletion_requested_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "signer_verification" ADD CONSTRAINT "signer_verification_invitation_id_invitation_id_fk" FOREIGN KEY ("invitation_id") REFERENCES "public"."invitation"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "signer_verification" ADD CONSTRAINT "signer_verification_document_id_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "signer_verification" ADD CONSTRAINT "signer_verification_purpose_valid" CHECK ("signer_verification"."purpose" IN ('sign', 'record'));--> statement-breakpoint
+ALTER TABLE "signer_verification" ADD CONSTRAINT "signer_verification_revision_positive" CHECK ("signer_verification"."revision" > 0);--> statement-breakpoint
+ALTER TABLE "signer_verification" ADD CONSTRAINT "signer_verification_attempts_positive" CHECK ("signer_verification"."attempts" >= 0);
