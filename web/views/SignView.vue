@@ -8,6 +8,7 @@ import {
   ChevronRight,
   PenLine,
   Clock3,
+  Mail,
   RefreshCw,
 } from "@lucide/vue";
 import PdfStage from "../components/PdfStage.vue";
@@ -40,6 +41,18 @@ const completedRecord = ref<{
   receipt?: EvidenceReceipt;
   participants?: Array<{ name: string; order: number; state: string }>;
 }>();
+// The verification panel shows its errors beside the code field instead of
+// at the top of the page.
+const needsVerification = computed(() => {
+  const request = details.value;
+  return Boolean(
+    request &&
+    request.state !== "signed" &&
+    request.signingStatus !== "waiting" &&
+    request.canSign &&
+    !request.verification?.verified,
+  );
+});
 const verificationBase = computed(
   () =>
     `/sign/${token}${details.value?.state === "signed" ? "/record" : ""}/verification`,
@@ -317,7 +330,9 @@ async function sign() {
     <p v-if="loading" class="loading" role="status">
       Opening your signing request…
     </p>
-    <p v-if="error" class="notice error" role="alert">{{ error }}</p>
+    <p v-if="error && !needsVerification" class="notice error" role="alert">
+      {{ error }}
+    </p>
     <template v-if="details"
       ><div v-if="details.state === 'signed'" class="sign-complete">
         <span class="completion-icon"><Check :size="30" /></span>
@@ -361,6 +376,7 @@ async function sign() {
                   <input
                     id="record-email-code"
                     v-model="verificationCode"
+                    class="code-input"
                     type="text"
                     inputmode="numeric"
                     autocomplete="one-time-code"
@@ -543,15 +559,17 @@ async function sign() {
         <p>Contact the sender if you still need to sign this document.</p>
       </div>
       <section
-        v-else-if="!details.verification?.verified"
+        v-else-if="needsVerification"
         class="sign-verification panel"
         aria-labelledby="verify-email-heading"
       >
+        <span class="completion-icon"><Mail :size="28" /></span>
         <h1 id="verify-email-heading">Verify your email to sign</h1>
-        <p>{{ details.documentName }}</p>
-        <p>
-          We will send a one-time code to {{ details.verification?.emailHint }}.
-          Enter it here to open the document and add your signature.
+        <p class="verify-document">{{ details.documentName }}</p>
+        <p class="verify-intro">
+          {{ codeSent ? "We sent" : "We will send" }} a one-time code to
+          <strong>{{ details.verification?.emailHint }}</strong>. Enter it here
+          to open the document and add your signature.
         </p>
         <p
           v-if="!details.verification?.deliveryAvailable"
@@ -562,12 +580,14 @@ async function sign() {
           PaperSign administrator.
         </p>
         <template v-else>
+          <p v-if="error" class="notice error" role="alert">{{ error }}</p>
           <form v-if="codeSent" @submit.prevent="verifyCode">
             <label class="field" for="signer-code"
               >Email verification code
               <input
                 id="signer-code"
                 v-model="verificationCode"
+                class="code-input"
                 type="text"
                 inputmode="numeric"
                 autocomplete="one-time-code"
@@ -591,7 +611,7 @@ async function sign() {
             </button>
           </form>
           <button
-            :class="codeSent ? 'text-button' : 'button primary'"
+            :class="codeSent ? 'text-button resend' : 'button primary full'"
             :disabled="busy || resendSeconds > 0"
             @click="sendCode"
           >
@@ -606,7 +626,7 @@ async function sign() {
             }}
           </button>
         </template>
-        <p class="hint">
+        <p class="hint verify-footnote">
           Never share your code with anyone, including the sender.
         </p>
       </section>
@@ -844,21 +864,72 @@ async function sign() {
 </template>
 <style scoped>
 .sign-verification {
-  max-width: 480px;
-  margin: 48px auto;
+  max-width: 500px;
+  margin: 64px auto 0;
+  padding: 44px 40px 30px;
+  text-align: center;
+}
+.sign-verification .completion-icon {
+  margin-bottom: 20px;
 }
 .sign-verification h1 {
-  font-size: 26px;
+  font-size: 28px;
 }
 .sign-verification p {
   overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+.verify-document {
+  margin-top: 10px;
+  font-size: 16px;
+  font-weight: 570;
+}
+.verify-intro {
+  margin-top: 14px;
+  color: var(--muted);
+}
+.verify-intro strong {
+  color: var(--ink);
+  font-weight: 570;
+}
+.sign-verification .notice {
+  margin: 24px 0 0;
+  text-align: start;
 }
 .sign-verification form {
-  margin-block: 24px 16px;
+  margin-top: 28px;
+  text-align: start;
 }
-.sign-verification input {
-  font-size: 18px;
+.sign-verification .field {
+  margin-bottom: 0;
+}
+.sign-verification form .hint {
+  margin: 8px 0 24px;
+  text-wrap: pretty;
+}
+.sign-verification > .button {
+  margin-top: 30px;
+}
+.resend {
+  display: flex;
+  width: fit-content;
+  margin: 14px auto 0;
   font-variant-numeric: tabular-nums;
+}
+.verify-footnote {
+  max-width: none;
+  margin-top: 30px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+input.code-input {
+  min-height: 52px;
+  font-size: 22px;
+  letter-spacing: 0.3em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  /* Balance the trailing letter spacing so the digits sit centred. */
+  padding-inline-start: calc(12px + 0.3em);
 }
 .record-access {
   margin-block: 28px;
@@ -869,10 +940,6 @@ async function sign() {
 }
 .record-access form {
   margin-block: 20px 12px;
-}
-.record-access input {
-  font-size: 18px;
-  font-variant-numeric: tabular-nums;
 }
 .record-participants {
   list-style: none;
@@ -896,7 +963,16 @@ async function sign() {
 }
 @media (max-width: 680px) {
   .sign-verification {
-    margin-block: 24px;
+    margin-top: 8px;
+    padding: 32px 22px 24px;
+  }
+  .sign-verification .completion-icon {
+    width: 56px;
+    height: 56px;
+    margin-bottom: 18px;
+  }
+  .sign-verification h1 {
+    font-size: 25px;
   }
 }
 </style>
