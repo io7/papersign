@@ -162,7 +162,8 @@ if it does not fit. Each signer can have up to ten required text fields.
 You can share all the links immediately. The intended recipient must verify an
 email code before viewing and accepting the document. Only the first unfinished signer can
 sign; everyone else sees a waiting screen with **Check again**. Completing one
-signature unlocks the next person's link. The owner can refresh the signer list
+signature unlocks the next person's link, and with email configured PaperSign
+tells that person it is their turn. The owner can refresh the signer list
 to see who is ready, waiting, signed, revoked or expired.
 
 Creating links fixes the document and signing order. Each link expires seven days
@@ -341,7 +342,8 @@ delivery and fail closed without it. Confirm the provider, sender/domain
 configuration and actual delivery before production use. Manually initiated
 invitation emails show recipients, subject and body before sending;
 user-requested verification and recovery messages are sent by their respective
-actions. Tests must use the synthetic local sink, never real recipients.
+actions, and the "your turn" notice goes to the next signer when an earlier
+request is signed or revoked. Tests must use the synthetic local sink, never real recipients.
 
 Signing and invitation links carry private tokens in the URL. Turn off access
 logging for PaperSign in the reverse proxy, and set `TRUSTED_PROXY` to that

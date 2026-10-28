@@ -95,6 +95,7 @@ and organization seal providers require separate configuration.
 
 Operators can disable public registration with `REGISTRATION_ENABLED=false`;
 valid account invitations remain available. Manually initiated invitation emails
-have a preview and separate send action. User-requested verification and recovery
+have a preview and separate send action; the next signer gets an automatic
+"your turn" notice once an earlier request is signed or revoked. User-requested verification and recovery
 messages are sent by those actions. Completed records have no automatic expiry;
 deletion requests do not silently erase another participant's evidence.

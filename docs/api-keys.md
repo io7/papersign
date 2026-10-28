@@ -89,7 +89,8 @@ node client/papersign.mjs download DOCUMENT_ID OUTPUT.pdf
 ```
 
 `plan` never contacts PaperSign. `create` never sends email. `email` sends the
-invitation emails that PaperSign previews, one per pending signer.
+invitation emails that PaperSign previews, one per pending signer. After that,
+PaperSign itself emails each later signer when their turn opens.
 
 A spec names the PDF, the signers in order and, for each field, a piece of text
 in the PDF to place it against:

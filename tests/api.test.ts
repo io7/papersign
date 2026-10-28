@@ -1,4 +1,8 @@
-import { assertTestMail } from "./helpers/test-mail.js";
+import {
+  assertTestMail,
+  latestTestMail,
+  waitForTestMail,
+} from "./helpers/test-mail.js";
 import { verifyFixtureEmail } from "./helpers/account-security.js";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { localFetch, setLocalClientAddress } from "./helpers/local-http.js";
@@ -658,6 +662,20 @@ describe("Private accounts, persistent signatures, PDF exports and signing links
     const tokens = invitations.map((invite: any) =>
       invite.url.split("/").pop(),
     );
+    const mailStart = Date.now();
+    const invitationPreview = async (index: number) =>
+      (
+        await request(
+          `/documents/${document.id}/invitations/${invitations[index].id}/email`,
+          cookieA,
+        )
+      ).json();
+    const firstPreview = await invitationPreview(0);
+    expect(firstPreview.body).toContain("You can sign it now.");
+    expect(firstPreview.body).not.toContain("earlier signers");
+    expect((await invitationPreview(1)).body).toContain(
+      "You are signer 2 in the signing order. Your turn opens once the earlier signers have finished, and PaperSign will email you when it does.",
+    );
     const list = (
       await (await request(`/documents/${document.id}`, cookieA)).json()
     ).invitations;
@@ -759,6 +777,21 @@ describe("Private accounts, persistent signatures, PDF exports and signing links
     expect(raced.map((response) => response.status).sort()).toEqual([
       200, 409, 409,
     ]);
+    // Only the signer whose turn just opened is told; later signers keep waiting.
+    const secondTurn = await waitForTestMail(
+      "second@example.invalid",
+      "Your turn to sign",
+      mailStart,
+    );
+    expect(secondTurn.text).toContain("The earlier signers have finished");
+    expect(secondTurn.text).toContain(`/sign/${tokens[1]}`);
+    expect(
+      await latestTestMail(
+        "third@example.invalid",
+        "Your turn to sign",
+        mailStart,
+      ),
+    ).toBeUndefined();
     const second = await (await request(`/sign/${tokens[1]}`)).json();
     expect([
       second.signingStatus,
@@ -799,6 +832,13 @@ describe("Private accounts, persistent signatures, PDF exports and signing links
       ).status,
     ).toBe(200);
     expect((await request(`/sign/${tokens[1]}`)).status).toBe(404);
+    // Revoking the waiting queue's head opens the next turn too.
+    const thirdTurn = await waitForTestMail(
+      "third@example.invalid",
+      "Your turn to sign",
+      mailStart,
+    );
+    expect(thirdTurn.text).toContain(`/sign/${tokens[2]}`);
     const third = await (await request(`/sign/${tokens[2]}`)).json();
     expect([
       third.signingStatus,
@@ -867,6 +907,11 @@ describe("Private accounts, persistent signatures, PDF exports and signing links
     expect(
       events.filter((event: any) => event.event === "signature_accepted"),
     ).toHaveLength(2);
+    expect(
+      events
+        .filter((event: any) => event.event === "turn_email_sent")
+        .map((event: any) => event.details.signingOrder),
+    ).toEqual([2, 3]);
   });
   it("keeps a later signer blocked by an expired earlier request until the owner revokes it", async () => {
     const database = new URL(config.DATABASE_URL);

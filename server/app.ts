@@ -1,4 +1,4 @@
-import Fastify, { type FastifyRequest } from "fastify";
+import Fastify, { type FastifyBaseLogger, type FastifyRequest } from "fastify";
 import multipart from "@fastify/multipart";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
@@ -371,13 +371,24 @@ function signedLayers(invitation: InvitationRow): FrozenPlacement[] {
     ...textLayers(invitation.field),
   ];
 }
+function signingLinkText(invitation: InvitationRow) {
+  const url = `${config.APP_URL}/sign/${unseal(invitation.sealedToken)}`;
+  return {
+    url,
+    text: `Open your private signing link:\n${url}\n\nThis link expires on ${invitation.expiresAt.toISOString().slice(0, 10)}. You can upload or draw your signature.\n\nPaperSign`,
+  };
+}
 function mailPreview(
-  invitation: typeof invitations.$inferSelect,
+  invitation: InvitationRow,
   doc: typeof documents.$inferSelect,
   senderName: string,
+  recipients: InvitationRow[],
 ) {
-  const url = `${config.APP_URL}/sign/${unseal(invitation.sealedToken)}`;
-  const body = `Hello ${invitation.name},\n\n${senderName} has invited you to sign “${doc.name}”. You are signer ${invitation.signingOrder} in the signing order. Your turn opens once the earlier signers have finished.\n\nOpen your private signing link:\n${url}\n\nThis link expires on ${invitation.expiresAt.toISOString().slice(0, 10)}. You can upload or draw your signature.\n\nPaperSign`;
+  const link = signingLinkText(invitation);
+  const turn = signingProgress(invitation, recipients).canSign
+    ? "You can sign it now."
+    : `You are signer ${invitation.signingOrder} in the signing order. Your turn opens once the earlier signers have finished${emailEnabled ? ", and PaperSign will email you when it does" : ""}.`;
+  const body = `Hello ${invitation.name},\n\n${senderName} has invited you to sign “${doc.name}”. ${turn}\n\n${link.text}`;
   return {
     to: invitation.email,
     subject: `${senderName} invited you to sign ${doc.name}`,
@@ -385,10 +396,92 @@ function mailPreview(
     html: emailHtml(body, {
       heading: "You’re invited to sign",
       preview: `${senderName} invited you to sign ${doc.name}.`,
-      action: { label: "Review document", url },
+      action: { label: "Review document", url: link.url },
     }),
     attachments: [],
   };
+}
+function turnMail(
+  invitation: InvitationRow,
+  doc: typeof documents.$inferSelect,
+  senderName: string,
+) {
+  const link = signingLinkText(invitation);
+  const body = `Hello ${invitation.name},\n\nThe earlier signers have finished, so you can now sign “${doc.name}” from ${senderName}.\n\n${link.text}`;
+  return {
+    to: invitation.email,
+    subject: `Your turn to sign ${doc.name}`,
+    text: body,
+    html: emailHtml(body, {
+      heading: "It’s your turn to sign",
+      preview: `You can now sign ${doc.name}.`,
+      action: { label: "Review document", url: link.url },
+    }),
+  };
+}
+/** Requests that could not be signed before a change and can be signed after it. */
+function newTurns(before: InvitationRow[], after: InvitationRow[]) {
+  const readyBefore = new Set(
+    before.filter((r) => signingProgress(r, before).canSign).map((r) => r.id),
+  );
+  return after.filter(
+    (r) => !readyBefore.has(r.id) && signingProgress(r, after).canSign,
+  );
+}
+/**
+ * Emails each signer whose turn opened because an earlier request was signed or revoked.
+ * Callers work out `due` inside the transaction that made the change and call this
+ * after it commits, so a failure never undoes that change. The outcome is kept in
+ * the document history.
+ */
+async function emailNewTurns(
+  documentId: string,
+  due: InvitationRow[],
+  actorId: string,
+  log: FastifyBaseLogger,
+) {
+  if (!emailEnabled || !due.length) return;
+  const doc = await db.query.documents.findFirst({
+    where: eq(documents.id, documentId),
+  });
+  if (!doc || doc.status !== "awaiting" || doc.deletedAt) return;
+  const owner = await db.query.user.findFirst({
+    where: eq(user.id, doc.userId),
+  });
+  for (const invitation of due) {
+    let event = "turn_email_sent";
+    try {
+      await sendSecurityMail(
+        turnMail(invitation, doc, owner?.name ?? "The sender"),
+      );
+    } catch {
+      event = "turn_email_failed";
+      log.warn(
+        { documentId, invitationId: invitation.id },
+        "Could not email the next signer",
+      );
+    }
+    await db.insert(audit).values({
+      id: randomUUID(),
+      documentId,
+      actor: actorId,
+      event,
+      details: {
+        invitationId: invitation.id,
+        signingOrder: invitation.signingOrder,
+      },
+    });
+  }
+}
+function emailNewTurnsLater(
+  documentId: string,
+  due: InvitationRow[],
+  actorId: string,
+  log: FastifyBaseLogger,
+) {
+  void emailNewTurns(documentId, due, actorId, log).catch(() =>
+    log.warn({ documentId }, "Could not check for the next signer's turn"),
+  );
 }
 
 export async function buildApp() {
@@ -1125,11 +1218,13 @@ export async function buildApp() {
       const u = await actor(req),
         id = getId(req),
         invitationId = getId(req, "invitationId");
+      let due: InvitationRow[] = [];
       await db.transaction(async (tx) => {
         await tx.execute(
           sql`select id from document where id = ${id} and user_id = ${u.id} for update`,
         );
         const currentDocument = await ownerDoc(id, u.id, tx);
+        const before = await documentInvitations(id, tx);
         const [revoked] = await tx
           .update(invitations)
           .set({ state: "revoked" })
@@ -1146,6 +1241,7 @@ export async function buildApp() {
           .select()
           .from(invitations)
           .where(eq(invitations.documentId, id));
+        due = newTurns(before, remaining);
         await tx
           .update(documents)
           .set({
@@ -1181,6 +1277,7 @@ export async function buildApp() {
             });
         }
       });
+      emailNewTurnsLater(id, due, u.id, req.log);
       return { ok: true };
     },
   );
@@ -1194,7 +1291,12 @@ export async function buildApp() {
       ),
     });
     if (!invitation) fail(404, "Invitation not found.");
-    const preview = mailPreview(invitation!, doc, u.name);
+    const preview = mailPreview(
+      invitation!,
+      doc,
+      u.name,
+      await documentInvitations(doc.id),
+    );
     return {
       ...preview,
       previewHash: sha256(JSON.stringify(preview)),
@@ -1222,7 +1324,12 @@ export async function buildApp() {
       });
       if (!invitation || invitation.expiresAt < new Date())
         fail(409, "This signing link is no longer active.");
-      const preview = mailPreview(invitation!, doc, u.name);
+      const preview = mailPreview(
+        invitation!,
+        doc,
+        u.name,
+        await documentInvitations(doc.id),
+      );
       if (sha256(JSON.stringify(preview)) !== body.previewHash)
         fail(409, "The invitation changed. Review the email again.");
       await sendSecurityMail({
@@ -1448,6 +1555,7 @@ export async function buildApp() {
         );
       const imageKey = await storeFile(normalized.bytes, "png");
       let acceptanceReceipt: { id: string; hash: string } | undefined;
+      let due: InvitationRow[] = [];
       try {
         await db.transaction(async (tx) => {
           await tx.execute(
@@ -1467,12 +1575,8 @@ export async function buildApp() {
               409,
               "This document changed. Reload it to review the latest signatures before signing.",
             );
-          if (
-            !signingProgress(
-              current,
-              await documentInvitations(document.id, tx),
-            ).canSign
-          )
+          const before = await documentInvitations(document.id, tx);
+          if (!signingProgress(current, before).canSign)
             fail(
               409,
               "Your turn opens once the earlier signers have finished.",
@@ -1550,6 +1654,7 @@ export async function buildApp() {
                 eq(invitations.state, "pending"),
               ),
             );
+          due = newTurns(before, remaining);
           await tx
             .update(documents)
             .set({
@@ -1596,6 +1701,7 @@ export async function buildApp() {
         await removeFile(imageKey);
         throw error;
       }
+      emailNewTurnsLater(document.id, due, r.id, req.log);
       return {
         state: "signed",
         acceptanceReceiptId: acceptanceReceipt!.id,
