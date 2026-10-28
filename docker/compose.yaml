@@ -7,7 +7,7 @@
 name: papersign
 
 x-app: &app
-  image: ${PAPERSIGN_IMAGE:-ghcr.io/io7/papersign:0.7.2}
+  image: ${PAPERSIGN_IMAGE:-ghcr.io/io7/papersign:0.7.3}
   build:
     context: ..
     dockerfile: Dockerfile

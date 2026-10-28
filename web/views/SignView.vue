@@ -10,6 +10,8 @@ import {
   Clock3,
   Mail,
   RefreshCw,
+  Download,
+  ArrowRight,
 } from "@lucide/vue";
 import PdfStage from "../components/PdfStage.vue";
 import PlacementBox from "../components/PlacementBox.vue";
@@ -41,8 +43,6 @@ const completedRecord = ref<{
   receipt?: EvidenceReceipt;
   participants?: Array<{ name: string; order: number; state: string }>;
 }>();
-// The verification panel shows its errors beside the code field instead of
-// at the top of the page.
 const needsVerification = computed(() => {
   const request = details.value;
   return Boolean(
@@ -53,6 +53,11 @@ const needsVerification = computed(() => {
     !request.verification?.verified,
   );
 });
+// The verification panel and the signing-record panel show their errors next
+// to their own controls instead of at the top of the page.
+const errorShownInPanel = computed(
+  () => needsVerification.value || details.value?.state === "signed",
+);
 const verificationBase = computed(
   () =>
     `/sign/${token}${details.value?.state === "signed" ? "/record" : ""}/verification`,
@@ -300,7 +305,11 @@ async function sign() {
       id: result.acceptanceReceiptId,
       hash: result.acceptanceReceiptHash,
     };
+    // The signing code's resend wait does not apply to the record code: the
+    // server limits each purpose separately.
     codeSent.value = false;
+    resendSeconds.value = 0;
+    clearInterval(resendTimer);
     await load();
   } catch (e) {
     error.value = errorMessage(e);
@@ -330,14 +339,15 @@ async function sign() {
     <p v-if="loading" class="loading" role="status">
       Opening your signing request…
     </p>
-    <p v-if="error && !needsVerification" class="notice error" role="alert">
+    <p v-if="error && !errorShownInPanel" class="notice error" role="alert">
       {{ error }}
     </p>
     <template v-if="details"
-      ><div v-if="details.state === 'signed'" class="sign-complete">
+      ><div v-if="details.state === 'signed'" class="sign-complete sign-signed">
         <span class="completion-icon"><Check :size="30" /></span>
         <h1>Your signature is in place.</h1>
-        <p>
+        <p class="signed-document">{{ details.documentName }}</p>
+        <p class="signed-status">
           {{
             details.cancelled
               ? "This signing request was cancelled. Your accepted signature remains in its preserved signing record."
@@ -348,18 +358,22 @@ async function sign() {
         </p>
         <button
           v-if="receipt"
-          class="button secondary"
+          class="button secondary signed-receipt"
           @click="downloadReceipt"
         >
-          Save my acceptance receipt
+          <Download :size="17" />Save my acceptance receipt
         </button>
-        <section class="record-access" aria-labelledby="record-access-heading">
+        <section
+          class="record-access panel"
+          aria-labelledby="record-access-heading"
+        >
           <h2 id="record-access-heading">Your signing record</h2>
           <template v-if="!details.recordVerification?.verified">
             <p>
-              Verify {{ details.recordVerification?.emailHint }} again to access
-              the completed PDF. This access remains available after the signing
-              invitation expires.
+              Verify
+              <strong>{{ details.recordVerification?.emailHint }}</strong> again
+              to access the completed PDF. This access remains available after
+              the signing invitation expires.
             </p>
             <p
               v-if="!details.recordVerification?.deliveryAvailable"
@@ -370,6 +384,9 @@ async function sign() {
               PaperSign administrator.
             </p>
             <template v-else>
+              <p v-if="error" class="notice error" role="alert">
+                {{ error }}
+              </p>
               <form v-if="codeSent" @submit.prevent="verifyCode">
                 <label class="field" for="record-email-code"
                   >Email verification code
@@ -391,14 +408,16 @@ async function sign() {
                   Enter the six-digit code in this browser within 10 minutes.
                 </p>
                 <button
-                  class="button primary"
+                  class="button primary full"
                   :disabled="busy || !/^\d{6}$/.test(verificationCode)"
                 >
                   {{ busy ? "Verifying…" : "Open signing record" }}
                 </button>
               </form>
               <button
-                :class="codeSent ? 'text-button' : 'button primary'"
+                :class="
+                  codeSent ? 'text-button resend' : 'button primary full send'
+                "
                 :disabled="busy || resendSeconds > 0"
                 @click="sendCode"
               >
@@ -447,8 +466,10 @@ async function sign() {
               </li>
             </ul>
             <div class="record-downloads">
-              <a class="button primary" :href="`/api/sign/${token}/record/pdf`"
-                >Download final PDF</a
+              <a
+                class="button primary full"
+                :href="`/api/sign/${token}/record/pdf`"
+                ><Download :size="17" />Download final PDF</a
               >
               <a
                 v-if="
@@ -507,19 +528,30 @@ async function sign() {
               }}
             </p>
             <button
-              class="button secondary"
+              class="button secondary full check"
               :disabled="busy"
               @click="checkAgain"
             >
-              {{ busy ? "Checking…" : "Check again" }}
+              <RefreshCw :size="17" />{{ busy ? "Checking…" : "Check again" }}
             </button>
           </template>
+          <p
+            v-if="error && details.recordVerification?.verified"
+            class="notice error"
+            role="alert"
+          >
+            {{ error }}
+          </p>
         </section>
-        <RouterLink v-if="currentUser" class="button secondary" to="/documents"
-          >Go to my documents</RouterLink
-        ><RouterLink v-else class="button secondary" to="/register"
-          >Create an account for next time</RouterLink
-        >
+        <RouterLink
+          v-if="currentUser"
+          class="text-button signed-exit"
+          to="/documents"
+          >Go to my documents<ArrowRight :size="16"
+        /></RouterLink>
+        <RouterLink v-else class="text-button signed-exit" to="/register"
+          >Create an account for next time<ArrowRight :size="16"
+        /></RouterLink>
       </div>
       <div
         v-else-if="details.signingStatus === 'waiting'"
@@ -931,20 +963,78 @@ input.code-input {
   /* Balance the trailing letter spacing so the digits sit centred. */
   padding-inline-start: calc(12px + 0.3em);
 }
+.sign-signed {
+  margin-block: 64px 72px;
+}
+.sign-signed .completion-icon {
+  margin-bottom: 20px;
+}
+.sign-signed p {
+  overflow-wrap: anywhere;
+}
+.signed-document {
+  margin: 12px 0 0;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 570;
+  text-wrap: balance;
+}
+.sign-signed .signed-status {
+  max-width: 540px;
+  margin: 8px auto 0;
+  text-wrap: balance;
+}
+.sign-signed .signed-receipt {
+  display: flex;
+  width: fit-content;
+  margin: 24px auto 0;
+}
 .record-access {
-  margin-block: 28px;
+  max-width: 500px;
+  margin: 36px auto 0;
+  padding: 30px 34px 32px;
   text-align: start;
 }
-.record-access h2 {
-  margin-block-end: 12px;
+.record-access p {
+  margin: 8px 0 0;
+  text-wrap: pretty;
+}
+.record-access p strong {
+  color: var(--ink);
+  font-weight: 570;
+}
+.record-access .notice {
+  margin: 18px 0 0;
 }
 .record-access form {
-  margin-block: 20px 12px;
+  margin-top: 22px;
+}
+.record-access .field {
+  margin-bottom: 0;
+}
+.record-access form .hint {
+  margin: 8px 0 20px;
+}
+.record-access .send,
+.record-access .check {
+  margin-top: 22px;
+}
+.record-access .hint {
+  margin-top: 14px;
+}
+.record-access > .text-button {
+  margin-top: 10px;
+}
+.signed-exit {
+  display: flex;
+  width: fit-content;
+  margin: 28px auto 0;
 }
 .record-participants {
   list-style: none;
   padding: 0;
-  margin-block: 20px;
+  margin: 18px 0 0;
+  border-top: 1px solid var(--line);
 }
 .record-participants li {
   display: flex;
@@ -959,7 +1049,19 @@ input.code-input {
 .record-downloads {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  align-items: center;
+  gap: 12px 18px;
+  margin-top: 22px;
+}
+.record-downloads .button {
+  margin: 0;
+}
+.record-downloads .secondary {
+  flex: 1 1 auto;
+}
+/* Centred when it wraps onto its own line on narrow screens. */
+.record-downloads .text-button {
+  margin-inline: auto;
 }
 @media (max-width: 680px) {
   .sign-verification {
@@ -973,6 +1075,21 @@ input.code-input {
   }
   .sign-verification h1 {
     font-size: 25px;
+  }
+  .sign-signed {
+    margin-top: 24px;
+  }
+  .sign-signed .completion-icon {
+    width: 56px;
+    height: 56px;
+    margin-bottom: 18px;
+  }
+  .sign-signed h1 {
+    font-size: 27px;
+  }
+  .record-access {
+    margin-top: 28px;
+    padding: 24px 20px;
   }
 }
 </style>

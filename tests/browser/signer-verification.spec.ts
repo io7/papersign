@@ -289,3 +289,38 @@ test("a viewer failure blocks consent; a loaded revision supplies the retained r
   ).toBeVisible();
   await capture(page, "completed-mobile");
 });
+
+test("the wait after sending a signing code does not hold back the signing-record code", async ({
+  page,
+}) => {
+  const state = {
+    verified: false,
+    failedPdf: false,
+    signed: false,
+    deliveryAvailable: true,
+  };
+  await mockRequest(page, state);
+  await page.goto(`/sign/${token}`);
+  await page
+    .getByRole("button", { name: "Send verification code", exact: true })
+    .click();
+  await page
+    .getByLabel("Email verification code", { exact: true })
+    .fill("123456");
+  await page
+    .getByRole("button", { name: "Verify and open document", exact: true })
+    .click();
+  await expect(page.locator(".pdf-overlay")).toBeVisible();
+  await upload(page);
+  await page.getByLabel(SIGNING_CONSENT.text).check();
+  await page
+    .getByRole("button", { name: "Agree and sign", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Your signing record" }),
+  ).toBeVisible();
+  // The server limits signing codes and record codes separately.
+  await expect(
+    page.getByRole("button", { name: "Send verification code", exact: true }),
+  ).toBeEnabled();
+});
