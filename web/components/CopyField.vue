@@ -19,6 +19,13 @@ const props = withDefaults(
     small?: boolean;
     /** Full-width box with the button below, for values people read or type. */
     stacked?: boolean;
+    /**
+     * Only the button. The box appears if copying fails, so the value can
+     * still be selected and copied by hand.
+     */
+    buttonOnly?: boolean;
+    /** Accessible name of the button, for lists where every button reads the same. */
+    buttonLabel?: string;
     disabled?: boolean;
   }>(),
   {
@@ -27,12 +34,15 @@ const props = withDefaults(
     copyLabel: "Copy",
     copiedMessage: "Copied.",
     failureMessage: "Could not copy. Select the text in the box and copy it.",
+    buttonLabel: undefined,
   },
 );
 const inputId = useId();
 const feedbackId = useId();
 const state = ref<"idle" | "copying" | "copied" | "error">("idle");
 const feedback = ref<HTMLElement>();
+const box = ref<HTMLInputElement | HTMLTextAreaElement>();
+const boxShown = ref(!props.buttonOnly);
 let disposed = false;
 
 const buttonText = computed(() => {
@@ -40,13 +50,20 @@ const buttonText = computed(() => {
   if (state.value === "copying") return "Copying…";
   return props.copyLabel;
 });
+// The fuller name only fits while the button shows its own label.
+const buttonName = computed(() =>
+  buttonText.value === props.copyLabel ? props.buttonLabel : undefined,
+);
 const message = computed(() =>
   state.value === "error" ? props.failureMessage : props.copiedMessage,
 );
 // A new value makes earlier feedback misleading.
 watch(
   () => props.value,
-  () => (state.value = "idle"),
+  () => {
+    state.value = "idle";
+    boxShown.value = !props.buttonOnly;
+  },
 );
 onBeforeUnmount(() => (disposed = true));
 
@@ -57,23 +74,32 @@ async function copy() {
     await copyText(props.value);
     if (!disposed) state.value = "copied";
   } catch {
-    if (!disposed) state.value = "error";
+    if (!disposed) {
+      state.value = "error";
+      boxShown.value = true;
+    }
   }
   await nextTick();
+  // Selecting the value leaves one keystroke to copy it by hand.
+  if (state.value === "error" && props.buttonOnly) box.value?.focus();
   feedback.value?.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 </script>
 
 <template>
-  <div class="copy-field" :class="{ small, stacked }">
-    <label v-if="label" :for="inputId" class="copy-field-label">{{
-      label
-    }}</label>
+  <div class="copy-field" :class="{ small, stacked, 'button-only': !boxShown }">
+    <label
+      v-if="label"
+      :for="boxShown ? inputId : undefined"
+      class="copy-field-label"
+      >{{ label }}</label
+    >
     <div class="copy-field-row">
       <!-- Stacked values wrap, so a long key stays readable on a phone. -->
       <textarea
-        v-if="stacked"
+        v-if="stacked && boxShown"
         :id="inputId"
+        ref="box"
         :value="value"
         :class="{ monospace }"
         :aria-label="inputLabel"
@@ -83,8 +109,9 @@ async function copy() {
         @focus="($event.target as HTMLTextAreaElement).select()"
       ></textarea>
       <input
-        v-else
+        v-else-if="boxShown"
         :id="inputId"
+        ref="box"
         :value="value"
         :class="{ monospace }"
         :aria-label="inputLabel"
@@ -97,6 +124,7 @@ async function copy() {
         class="button secondary"
         :class="{ small }"
         :disabled="disabled || state === 'copying'"
+        :aria-label="buttonName"
         :aria-describedby="state === 'idle' ? undefined : feedbackId"
         @click="copy"
       >

@@ -13,6 +13,7 @@ import {
   ArrowLeft,
   ArrowUp,
   ArrowDown,
+  Ban,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -33,7 +34,14 @@ import OwnerReviewDialog from "../components/OwnerReviewDialog.vue";
 import PlacementBox from "../components/PlacementBox.vue";
 import SignatureComposer from "../components/SignatureComposer.vue";
 import CopyField from "../components/CopyField.vue";
-import { api, json, errorMessage, newId, formatDate } from "../api";
+import {
+  api,
+  json,
+  errorMessage,
+  newId,
+  formatDate,
+  formatShortDate,
+} from "../api";
 import { fitPdfText, normalizePdfText } from "../../shared/pdf-text";
 import type {
   DocumentInfo,
@@ -615,13 +623,26 @@ function removeRecipient(fieldId: string) {
     active.value = "";
 }
 function signingStatus(invitation: Invitation) {
-  return {
-    ready: "Ready to sign",
-    waiting: "Waiting for previous signer",
-    signed: "Signed",
-    revoked: "Revoked",
-    expired: "Expired",
-  }[invitation.signingStatus];
+  const expires = formatShortDate(invitation.expiresAt);
+  switch (invitation.signingStatus) {
+    case "signed":
+      return `Signed ${formatDate(invitation.signedAt!)}`;
+    case "ready":
+      return `Ready to sign · expires ${expires}`;
+    case "waiting": {
+      // The first earlier signer who still has to act is the one holding this up.
+      const before = invitations.value.find(
+        (other) =>
+          other.state === "pending" &&
+          other.signingOrder < invitation.signingOrder,
+      );
+      return `Waiting for ${before?.name ?? "previous signer"} · expires ${expires}`;
+    }
+    case "expired":
+      return `Link expired ${expires}`;
+    case "revoked":
+      return "Revoked";
+  }
 }
 async function createInvitations() {
   if (!staged.value.length || unfinishedRecipient.value || !termsLocked.value)
@@ -1258,80 +1279,84 @@ async function sendEmail() {
             You can share every link now. Each person can sign when it is their
             turn.
           </p>
-          <ol class="signer-list" aria-label="Signing requests">
+          <ol class="signer-steps" aria-label="Signing requests">
             <li
               v-for="invitation in invitations"
               :key="invitation.id"
-              class="invitation"
+              class="signer-step"
+              :class="`is-${invitation.signingStatus}`"
             >
-              <div class="signer-heading">
-                <span class="signer-number" aria-hidden="true">{{
-                  invitation.signingOrder
-                }}</span>
-                <div>
-                  <strong>{{ invitation.name }}</strong
-                  ><span class="recipient-email">{{ invitation.email }}</span>
-                </div>
-              </div>
-              <span class="status" :class="invitation.signingStatus">{{
-                signingStatus(invitation)
-              }}</span>
-              <span v-if="invitation.signedAt" class="hint"
-                >Signed {{ formatDate(invitation.signedAt) }}</span
-              >
-              <span v-else-if="invitation.state === 'pending'" class="hint"
-                >{{
-                  invitation.signingStatus === "expired" ? "Expired" : "Expires"
-                }}
-                {{ formatDate(invitation.expiresAt) }}</span
-              >
-              <template v-if="invitation.state === 'pending'"
-                ><CopyField
-                  v-if="invitation.signingStatus !== 'expired'"
-                  class="signing-link"
-                  :value="invitation.url!"
-                  :input-label="`Signing link for ${invitation.name}`"
-                  copy-label="Copy link"
-                  copied-message="Link copied."
-                  failure-message="Could not copy the link. Select and copy it from the box."
-                  small
-                  :disabled="busy"
+              <span class="step-mark" aria-hidden="true">
+                <Check
+                  v-if="invitation.signingStatus === 'signed'"
+                  :size="15"
                 />
-                <div class="button-row wrap">
+                <X
+                  v-else-if="invitation.signingStatus === 'revoked'"
+                  :size="14"
+                />
+                <template v-else>{{ invitation.signingOrder }}</template>
+              </span>
+              <div class="step-body">
+                <div class="step-title">
+                  <strong>{{ invitation.name }}</strong>
+                  <!-- Kept apart from the everyday buttons: it cannot be undone. -->
+                  <button
+                    v-if="invitation.state === 'pending'"
+                    class="text-button step-revoke"
+                    :aria-label="`Revoke signing link for ${invitation.name}`"
+                    :disabled="busy"
+                    @click="revoke(invitation)"
+                  >
+                    <Ban :size="13" />Revoke
+                  </button>
+                </div>
+                <span class="recipient-email">{{ invitation.email }}</span>
+                <span class="step-state">{{ signingStatus(invitation) }}</span>
+                <div v-if="invitation.state === 'pending'" class="step-actions">
                   <button
                     v-if="invitation.signingStatus === 'expired'"
                     class="button small secondary"
+                    :aria-label="`Renew link for ${invitation.name}`"
                     :disabled="busy"
                     @click="reissue(invitation)"
                   >
                     <RefreshCw :size="15" />Renew link
                   </button>
-                  <button
-                    v-if="invitation.signingStatus !== 'expired'"
-                    class="button small secondary"
-                    :disabled="busy"
-                    @click="previewEmail(invitation)"
-                  >
-                    <Mail :size="15" />Email</button
-                  ><button
-                    class="text-button danger-text"
-                    :disabled="busy"
-                    @click="revoke(invitation)"
-                  >
-                    Revoke
-                  </button>
-                </div></template
-              >
+                  <template v-else>
+                    <CopyField
+                      :value="invitation.url!"
+                      :input-label="`Signing link for ${invitation.name}`"
+                      :button-label="`Copy link for ${invitation.name}`"
+                      copy-label="Copy link"
+                      copied-message="Link copied."
+                      failure-message="Could not copy the link. Select and copy it from the box."
+                      small
+                      button-only
+                      :disabled="busy"
+                    />
+                    <button
+                      class="button small secondary"
+                      :aria-label="`Email ${invitation.name}`"
+                      :disabled="busy"
+                      @click="previewEmail(invitation)"
+                    >
+                      <Mail :size="15" />Email
+                    </button>
+                  </template>
+                </div>
+              </div>
             </li>
           </ol>
-          <button
-            v-if="doc.status === 'awaiting'"
-            class="text-button danger-text"
-            :disabled="busy"
-            @click="cancelSigning"
-          >
-            Cancel signing request
-          </button>
+          <div v-if="doc.status === 'awaiting'" class="cancel-row">
+            <button
+              class="text-button danger-text"
+              :disabled="busy"
+              @click="cancelSigning"
+            >
+              Cancel signing request
+            </button>
+          </div>
         </section>
         <section class="tool-section download-section">
           <h2>Finish your PDF</h2>
@@ -1400,59 +1425,63 @@ async function sendEmail() {
               Retry signing record
             </button>
           </div>
+          <!-- While people are still signing there is nothing to download or
+               delete yet, so the section only says when the PDF arrives. -->
           <p v-if="doc.status === 'awaiting'" class="notice">
             The completed PDF will be available when all active requests are
             signed.
           </p>
-          <button
-            v-if="completedRecord?.state !== 'ready'"
-            class="button primary full"
-            :disabled="busy || doc.status === 'awaiting'"
-            @click="startExport(false)"
-          >
-            <Download :size="18" />{{
-              busy && exportJob
-                ? "Preparing PDF…"
-                : doc.status === "draft" &&
-                    placements.some((p) => p.kind !== "text")
-                  ? "Review and sign"
-                  : "Prepare download"
-            }}
-          </button>
-          <button
-            class="text-button advanced-download-button"
-            :disabled="busy || doc.status === 'awaiting'"
-            @click="openAdvancedDownload"
-          >
-            <SlidersHorizontal :size="16" />Advanced download
-          </button>
-          <a
-            v-if="exportJob?.state === 'ready'"
-            class="button secondary full download-ready"
-            :href="`/api/exports/${exportJob.id}/download`"
-            download
-            ><Download :size="18" />Download signed PDF</a
-          >
-          <p class="hint">Your original PDF stays intact.</p>
-          <button
-            class="text-button danger-text"
-            :disabled="busy || doc.status === 'awaiting'"
-            @click="requestDeletion"
-          >
-            Request document deletion
-          </button>
-          <p v-if="certificateSealingEnabled" class="hint">
-            Downloads include an organization certificate seal, trusted
-            timestamp and embedded validation evidence.
-          </p>
-          <p
-            v-if="exportJob?.state === 'ready' && exportJob.seal"
-            class="hint"
-            role="status"
-          >
-            Certificate seal verified. Timestamp:
-            {{ formatDate(exportJob.seal.timestamp) }}.
-          </p>
+          <template v-else>
+            <button
+              v-if="completedRecord?.state !== 'ready'"
+              class="button primary full"
+              :disabled="busy"
+              @click="startExport(false)"
+            >
+              <Download :size="18" />{{
+                busy && exportJob
+                  ? "Preparing PDF…"
+                  : doc.status === "draft" &&
+                      placements.some((p) => p.kind !== "text")
+                    ? "Review and sign"
+                    : "Prepare download"
+              }}
+            </button>
+            <button
+              class="text-button advanced-download-button"
+              :disabled="busy"
+              @click="openAdvancedDownload"
+            >
+              <SlidersHorizontal :size="16" />Advanced download
+            </button>
+            <a
+              v-if="exportJob?.state === 'ready'"
+              class="button secondary full download-ready"
+              :href="`/api/exports/${exportJob.id}/download`"
+              download
+              ><Download :size="18" />Download signed PDF</a
+            >
+            <p class="hint">Your original PDF stays intact.</p>
+            <button
+              class="text-button danger-text"
+              :disabled="busy"
+              @click="requestDeletion"
+            >
+              Request document deletion
+            </button>
+            <p v-if="certificateSealingEnabled" class="hint">
+              Downloads include an organization certificate seal, trusted
+              timestamp and embedded validation evidence.
+            </p>
+            <p
+              v-if="exportJob?.state === 'ready' && exportJob.seal"
+              class="hint"
+              role="status"
+            >
+              Certificate seal verified. Timestamp:
+              {{ formatDate(exportJob.seal.timestamp) }}.
+            </p>
+          </template>
         </section>
       </aside>
     </div>
@@ -1635,5 +1664,150 @@ async function sendEmail() {
 }
 .download-section {
   padding-top: 24px;
+}
+.download-section > .notice:last-child {
+  margin-bottom: 0;
+}
+/* Signing order: one step per signer on a line that turns green as people
+   sign. Status is coloured text, not a badge. */
+.signer-steps {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+}
+.signer-step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  column-gap: 12px;
+  padding-bottom: 22px;
+}
+.signer-step:last-child {
+  padding-bottom: 4px;
+}
+.signer-step:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 13.5px;
+  top: 32px;
+  bottom: 4px;
+  width: 1px;
+  background: #c9d4ca;
+}
+.signer-step.is-signed::before {
+  background: #9cc5a3;
+}
+.step-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.is-signed > .step-mark {
+  background: #e5f2e6;
+  color: #30653b;
+}
+.is-ready > .step-mark {
+  background: var(--green);
+  color: var(--paper);
+}
+.is-waiting > .step-mark {
+  background: var(--paper);
+  color: var(--muted);
+  box-shadow: inset 0 0 0 1px #c9d4ca;
+}
+.is-expired > .step-mark {
+  background: #f3e7e5;
+  color: #8c4942;
+}
+.is-revoked > .step-mark {
+  background: #f0f2ef;
+  color: var(--muted);
+}
+.step-body {
+  display: grid;
+  /* A fixed column, so a revealed link box shrinks instead of widening the step. */
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: start;
+  min-width: 0;
+}
+.step-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  justify-self: stretch;
+}
+.step-title strong {
+  min-width: 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.is-revoked .step-title strong {
+  color: var(--muted);
+}
+.step-body .recipient-email {
+  margin-top: 2px;
+}
+.step-state {
+  margin-top: 8px;
+  font-size: 12.5px;
+  font-weight: 570;
+  font-variant-numeric: tabular-nums;
+}
+.is-signed .step-state {
+  color: #30653b;
+}
+.is-ready .step-state {
+  color: var(--green);
+}
+.is-waiting .step-state {
+  color: #73581b;
+}
+.is-expired .step-state {
+  color: #8c4942;
+}
+.is-revoked .step-state {
+  color: var(--muted);
+}
+/* Quiet until pointed at, so the name stays the first thing you read. */
+.step-revoke {
+  flex-shrink: 0;
+  gap: 4px;
+  padding: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.step-revoke:hover:not(:disabled),
+.step-revoke:focus-visible {
+  color: var(--red);
+}
+/* Two equal columns; a lone button (Renew link) takes both. */
+.step-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 8px;
+  justify-self: stretch;
+  margin-top: 12px;
+}
+.step-actions > :only-child {
+  grid-column: 1 / -1;
+}
+.step-actions .button-only :deep(.button) {
+  flex: 1;
+}
+/* A failed copy shows the link box; it needs the whole row. */
+.step-actions > .copy-field:not(.button-only) {
+  grid-column: 1 / -1;
+}
+.cancel-row {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }
 </style>

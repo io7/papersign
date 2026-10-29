@@ -1,6 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 import { PDFDocument } from "pdf-lib";
-import type { DocumentInfo, Placement } from "../../shared/types";
+import type { DocumentInfo, Invitation, Placement } from "../../shared/types";
 import { normalizePdfText } from "../../shared/pdf-text";
 import { samplePdf, signaturePng } from "../fixtures";
 
@@ -15,7 +15,13 @@ export interface EditorSave {
 /** A closed local fixture: only revision-checked placement writes are accepted. */
 export async function editorFixture(
   page: Page,
-  options: { name?: string; pdf?: Buffer; placements?: Placement[] } = {},
+  options: {
+    name?: string;
+    pdf?: Buffer;
+    placements?: Placement[];
+    status?: DocumentInfo["status"];
+    invitations?: Invitation[];
+  } = {},
 ) {
   const bytes = options.pdf ?? (await samplePdf(false));
   const pdf = await PDFDocument.load(bytes);
@@ -44,11 +50,11 @@ export async function editorFixture(
         height: 0.08,
       },
     ],
-    status: "draft",
+    status: options.status ?? "draft",
     revision: 1,
     createdAt: "2026-10-22T00:00:00Z",
     updatedAt: "2026-10-22T00:00:00Z",
-    invitations: [],
+    invitations: options.invitations ?? [],
   };
   const saves: EditorSave[] = [];
   const unexpectedWrites: string[] = [];

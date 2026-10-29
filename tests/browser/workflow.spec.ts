@@ -5,6 +5,7 @@ import {
   declareTermsComplete,
   cloneDraftForInvitations,
 } from "../helpers/owner-signing.js";
+import { copySigningLink } from "../helpers/signing-links.js";
 import { verifyFixtureEmail } from "../helpers/account-security.js";
 import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
@@ -308,15 +309,12 @@ test("register, draw, save, reuse after login, place, download, and invite a gue
     .getByRole("button", { name: "Create signing links", exact: true })
     .click();
   await acceptOwnerReview(page);
-  const link = page.getByRole("textbox", {
-    name: "Signing link for Jordan Lee",
-  });
-  await expect(link).toBeVisible();
+  const link = await copySigningLink(page, "Jordan Lee");
   const guest = await browser.newContext({
     viewport: { width: 1280, height: 900 },
   });
   const signer = await guest.newPage();
-  await signer.goto(await link.inputValue());
+  await signer.goto(link);
   await verifyBrowserRecipient(signer, "jordan@example.invalid");
   await expect(
     signer.getByRole("heading", { name: "Review and sign" }),
@@ -433,8 +431,10 @@ test("build and reorder a signer list, share links, and sign one after another",
     "Ready to sign",
   );
   await expect(requests.getByRole("listitem").nth(1)).toContainText(
-    "Waiting for previous signer",
+    "Waiting for Jordan Lee",
   );
+  // The link box only appears if copying fails.
+  await expect(requests.getByRole("textbox")).toHaveCount(0);
   await ownerViewport(page, 390, 844);
   expect(
     await page.evaluate(
@@ -444,12 +444,8 @@ test("build and reorder a signer list, share links, and sign one after another",
   await captureOwner(page, ".impeccable/review/serial-owner-mobile.png");
   await ownerViewport(page, 1440, 1000);
   await captureOwner(page, ".impeccable/review/serial-owner-desktop.png");
-  const firstUrl = await page
-    .getByRole("textbox", { name: "Signing link for Jordan Lee", exact: true })
-    .inputValue();
-  const secondUrl = await page
-    .getByRole("textbox", { name: "Signing link for Maya Patel", exact: true })
-    .inputValue();
+  const firstUrl = await copySigningLink(page, "Jordan Lee");
+  const secondUrl = await copySigningLink(page, "Maya Patel");
   expect(firstUrl).not.toBe(secondUrl);
   const firstContext = await browser.newContext({
     viewport: { width: 1280, height: 1000 },
@@ -528,7 +524,9 @@ test("build and reorder a signer list, share links, and sign one after another",
   await expect(
     page.getByText("Signing completed", { exact: true }),
   ).toBeVisible();
-  await expect(requests.getByText("Signed", { exact: true })).toHaveCount(2);
+  await expect(requests.getByText(/^Signed /)).toHaveCount(2);
+  // Signed steps have nothing left to do.
+  await expect(requests.getByRole("button")).toHaveCount(0);
   expect(errors).toEqual([]);
   await firstContext.close();
   await secondContext.close();
@@ -854,9 +852,7 @@ test("clean uploaded signatures, edit with Delete, scroll the entire PDF, and ch
     .getByRole("button", { name: "Create signing links", exact: true })
     .click();
   await acceptOwnerReview(page);
-  const guestUrl = await page
-    .getByRole("textbox", { name: "Signing link for Taylor Reed", exact: true })
-    .inputValue();
+  const guestUrl = await copySigningLink(page, "Taylor Reed");
   const lockedPlacements = await viewer.locator(".placement").count();
   expect(lockedPlacements).toBeGreaterThan(0);
   await viewer.focus();

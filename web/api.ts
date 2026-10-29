@@ -58,6 +58,12 @@ export function formatDate(value: string) {
     year: "numeric",
   });
 }
+/** Like formatDate, but leaves out the year when it is this year. */
+export function formatShortDate(value: string) {
+  const date = new Date(value);
+  if (date.getFullYear() !== new Date().getFullYear()) return formatDate(value);
+  return date.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}
 export async function copyText(value: string) {
   if (navigator.clipboard) return navigator.clipboard.writeText(value);
   const input = document.createElement("textarea");

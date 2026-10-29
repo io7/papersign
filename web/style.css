@@ -1303,61 +1303,15 @@ dialog.advanced-download-dialog {
   margin: 12px 0;
   color: var(--ink);
 }
-.signer-list {
-  list-style: none;
-  margin: 18px 0 0;
-  padding: 0;
-}
 .signing-progress {
   margin: 0 0 10px;
   color: var(--ink);
   font-size: 13px;
 }
-.signer-heading {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-}
-.signer-heading > div {
-  min-width: 0;
-}
-.signer-heading strong {
-  display: block;
-  font-size: 14px;
-  overflow-wrap: anywhere;
-}
-.signer-heading .recipient-email {
-  display: block;
-  margin-top: 3px;
-}
-.signing-requests .status {
-  white-space: normal;
-  text-transform: none;
-  text-align: left;
-}
-.invitation {
-  display: grid;
-  gap: 7px;
-  border-bottom: 1px solid var(--line);
-  padding: 16px 0;
-}
-.invitation:first-of-type {
-  padding-top: 0;
-}
-.invitation:last-child {
-  border-bottom: 0;
-}
 .recipient-email {
   color: var(--muted);
   font-size: 12px;
   overflow-wrap: anywhere;
-}
-.invitation .button-row {
-  gap: 8px;
-  margin-top: 5px;
-}
-.invitation .signing-link {
-  margin-top: 6px;
 }
 .dialog-backdrop {
   position: fixed;

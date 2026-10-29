@@ -1,6 +1,7 @@
 import { verifyBrowserRecipient } from "../helpers/signer-verification.js";
 import { SIGNING_CONSENT } from "../../shared/signing-consent.js";
 import { declareTermsComplete } from "../helpers/owner-signing.js";
+import { copySigningLink } from "../helpers/signing-links.js";
 import { assertTestMail } from "../helpers/test-mail.js";
 import { verifyFixtureEmail } from "../helpers/account-security.js";
 import { test, expect, type Page } from "@playwright/test";
@@ -274,12 +275,8 @@ test("add owner text and required place/date, then preserve it through serial si
   await page
     .getByRole("button", { name: "Create signing links", exact: true })
     .click();
-  const firstUrl = await page
-    .getByRole("textbox", { name: "Signing link for Maya Patel", exact: true })
-    .inputValue();
-  const secondUrl = await page
-    .getByRole("textbox", { name: "Signing link for Jordan Lee", exact: true })
-    .inputValue();
+  const firstUrl = await copySigningLink(page, "Maya Patel");
+  const secondUrl = await copySigningLink(page, "Jordan Lee");
   const firstContext = await browser.newContext({
     viewport: { width: 1280, height: 1000 },
   });
