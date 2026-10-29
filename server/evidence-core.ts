@@ -115,12 +115,14 @@ export function verifyEvidenceManifest(manifest: EvidenceManifest) {
             checkedAt?: string;
           }
         | undefined;
-      const authenticationTime =
-        authentication?.method === "verified-account"
-          ? authentication.checkedAt
-          : authentication?.method === "email-one-time-code"
-            ? authentication.verifiedAt
-            : undefined;
+      let authenticationTime: string | undefined;
+      if (authentication?.method === "verified-account")
+        authenticationTime = authentication.checkedAt;
+      else if (
+        authentication?.method === "email-one-time-code" ||
+        authentication?.method === "account-authenticator"
+      )
+        authenticationTime = authentication.verifiedAt;
       if (
         !consent?.version ||
         !consent.text ||

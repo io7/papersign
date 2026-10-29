@@ -852,6 +852,21 @@ strong {
 .auth-form .field {
   margin-bottom: 22px;
 }
+/* Same checkbox row as Account security's consent label. */
+.auth-form .remember-browser {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  margin: -8px 0 14px;
+  padding: 4px 0;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 24px;
+}
+.auth-form .remember-browser input {
+  margin: 3px 0 0;
+}
 .auth-submit {
   margin-top: 7px;
   width: 100%;

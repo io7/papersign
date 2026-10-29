@@ -32,7 +32,9 @@ Every Admin API request checks the current database role, verified account email
 enabled authenticator and successful MFA confirmation in the current session.
 Existing and newly promoted Admins must complete enrollment through **Account
 security** before opening Admin. Recovery codes must be saved separately; an
-Admin cannot disable MFA while holding that role. A session created
+Admin cannot disable MFA while holding that role. A sign-in from a browser
+remembered for 7 days skips the code but is not MFA-confirmed, so Admin asks for
+the code again. A session created
 while someone was an Admin does not retain those permissions after demotion.
 Role changes include the expected previous role; stale changes are rejected so
 the operator can refresh the list. A transaction lock serializes role changes

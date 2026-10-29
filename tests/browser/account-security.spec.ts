@@ -150,7 +150,17 @@ test("verify email, enroll an Admin authenticator, sign in with MFA and recover 
     await page
       .getByLabel("Authenticator code", { exact: true })
       .fill(fixtureTotp(uri!));
+    await page
+      .getByRole("checkbox", { name: "Remember this browser for 7 days" })
+      .check();
     await page.getByRole("button", { name: "Verify and sign in" }).click();
+    await expect(page).toHaveURL(/\/documents$/);
+    // The remembered browser skips the code at the next sign-in. The password
+    // reset below forgets it, so the final sign-in asks for the code again.
+    await page.getByRole("button", { name: "Sign out", exact: true }).click();
+    await page.getByLabel("Email address").fill(email);
+    await page.getByLabel("Password", { exact: true }).fill(password);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(page).toHaveURL(/\/documents$/);
     await page.getByRole("button", { name: "Sign out", exact: true }).click();
     await page.getByRole("link", { name: "Forgot your password?" }).click();
@@ -169,6 +179,9 @@ test("verify email, enroll an Admin authenticator, sign in with MFA and recover 
       "Your password has been reset",
     );
     await page.getByRole("link", { name: "Back to sign in" }).click();
+    // Better Auth allows three sign-ins per 10 seconds from one address, and
+    // this test has just used them.
+    await page.waitForTimeout(10_500);
     await page.getByLabel("Email address").fill(email);
     await page.getByLabel("Password", { exact: true }).fill(nextPassword);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();

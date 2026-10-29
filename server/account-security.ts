@@ -2,7 +2,11 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { fromNodeHeaders } from "better-auth/node";
 import { and, desc, eq, gt, ne } from "drizzle-orm";
 import { z } from "zod";
-import { auth } from "./auth.js";
+import {
+  auth,
+  forgetRememberedBrowsers,
+  rememberedBrowserCount,
+} from "./auth.js";
 import { db } from "./db.js";
 import { session, user } from "./schema.js";
 import { config } from "./config.js";
@@ -62,6 +66,7 @@ export async function registerAccountSecurityRoutes(app: FastifyInstance) {
       mfaVerified: active.session.mfaVerified,
       admin: account.role === "admin",
       emailEnabled: mailConfigured(),
+      rememberedBrowsers: await rememberedBrowserCount(account.id),
       sessions: sessions.map((item) => ({
         ...item,
         current: item.id === active.session.id,
@@ -91,6 +96,10 @@ export async function registerAccountSecurityRoutes(app: FastifyInstance) {
       return { ok: true };
     },
   );
+  app.post("/api/account/remembered-browsers/forget", async (req) => {
+    const active = await current(req);
+    return { forgotten: await forgetRememberedBrowsers(active.user.id) };
+  });
   app.post("/api/account/sessions/revoke-others", async (req) => {
     const active = await current(req);
     await db

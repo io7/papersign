@@ -11,6 +11,7 @@ type Security = {
   mfaVerified: boolean;
   admin: boolean;
   emailEnabled: boolean;
+  rememberedBrowsers: number;
   sessions: {
     id: string;
     current: boolean;
@@ -164,6 +165,20 @@ async function revoke(id?: string) {
       : "All other sessions have been signed out.";
   });
 }
+async function forgetBrowsers() {
+  await action("forget", async () => {
+    await api("/account/remembered-browsers/forget", { method: "POST" });
+    await load();
+    notice.value =
+      "Remembered browsers are forgotten. Each will ask for your authenticator code at the next sign-in.";
+  });
+}
+const rememberedSummary = computed(() => {
+  const count = security.value?.rememberedBrowsers ?? 0;
+  if (count === 0) return "No browser is remembered.";
+  if (count === 1) return "1 browser is remembered.";
+  return `${count} browsers are remembered.`;
+});
 const sessionTime = (value: string) =>
   new Date(value).toLocaleString(undefined, {
     dateStyle: "medium",
@@ -478,6 +493,31 @@ function device(agent: string | null) {
                 busy === "others"
                   ? "Signing out…"
                   : "Sign out all other sessions"
+              }}
+            </button>
+          </div>
+        </section>
+        <section
+          v-if="security.twoFactorEnabled"
+          class="security-section"
+          aria-labelledby="remembered-heading"
+        >
+          <div class="security-description">
+            <h2 id="remembered-heading">Remembered browsers</h2>
+            <p class="muted">
+              A remembered browser skips the authenticator code at sign-in for 7
+              days. Admin and security changes still ask for it.
+            </p>
+          </div>
+          <div class="security-controls">
+            <p>{{ rememberedSummary }}</p>
+            <button
+              class="button secondary"
+              :disabled="Boolean(busy) || security.rememberedBrowsers === 0"
+              @click="forgetBrowsers"
+            >
+              {{
+                busy === "forget" ? "Forgetting…" : "Forget remembered browsers"
               }}
             </button>
           </div>

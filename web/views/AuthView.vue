@@ -19,6 +19,7 @@ const registrationEnabled = ref(true),
   emailEnabled = ref(false);
 const secondFactor = ref(false),
   recovery = ref(false),
+  rememberBrowser = ref(false),
   code = ref("");
 const resetToken = ref(String(route.query.token ?? ""));
 const title = computed(() =>
@@ -95,7 +96,11 @@ async function submit() {
           : "/auth/two-factor/verify-totp",
         {
           method: "POST",
-          body: json({ code: code.value.trim(), trustDevice: false }),
+          // Only an authenticator code may remember the browser.
+          body: json({
+            code: code.value.trim(),
+            trustDevice: !recovery.value && rememberBrowser.value,
+          }),
         },
       );
       code.value = "";
@@ -200,6 +205,11 @@ async function submit() {
                 autofocus
               />
             </label>
+            <label v-if="!recovery" class="remember-browser"
+              ><input v-model="rememberBrowser" type="checkbox" /><span
+                >Remember this browser for 7 days</span
+              ></label
+            >
             <button
               class="text-button"
               type="button"

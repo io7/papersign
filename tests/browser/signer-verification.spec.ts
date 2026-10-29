@@ -17,6 +17,9 @@ async function mockRequest(
     recordVerified?: boolean;
     record?: Record<string, unknown>;
     accepted?: Record<string, unknown>;
+    authenticatorAvailable?: boolean;
+    accountSession?: boolean;
+    proofs?: Array<{ path: string; body: Record<string, unknown> }>;
   },
 ) {
   const pdf = await samplePdf();
@@ -30,6 +33,17 @@ async function mockRequest(
         json: { sent: true, expiresInSeconds: 600, resendAfterSeconds: 60 },
       });
     if (path.endsWith("/verification/confirm")) {
+      state.verified = true;
+      return route.fulfill({ json: { verified: true } });
+    }
+    if (
+      path.endsWith("/verification/authenticator") ||
+      path.endsWith("/verification/account")
+    ) {
+      state.proofs?.push({
+        path: path.slice(path.lastIndexOf("/") + 1),
+        body: request.postDataJSON(),
+      });
       state.verified = true;
       return route.fulfill({ json: { verified: true } });
     }
@@ -85,6 +99,8 @@ async function mockRequest(
           verified: state.verified,
           emailHint: "s•••@example.test",
           deliveryAvailable: state.deliveryAvailable,
+          authenticatorAvailable: state.authenticatorAvailable ?? false,
+          accountSession: state.accountSession ?? false,
         },
         recordVerification: state.signed
           ? {
@@ -323,4 +339,92 @@ test("the wait after sending a signing code does not hold back the signing-recor
   await expect(
     page.getByRole("button", { name: "Send verification code", exact: true }),
   ).toBeEnabled();
+});
+
+test("an account holder verifies with the authenticator code, with the email code as fallback", async ({
+  page,
+}) => {
+  const state = {
+    verified: false,
+    failedPdf: false,
+    signed: false,
+    deliveryAvailable: true,
+    authenticatorAvailable: true,
+    proofs: [] as Array<{ path: string; body: Record<string, unknown> }>,
+  };
+  await mockRequest(page, state);
+  await page.goto(`/sign/${token}`);
+  await expect(
+    page.getByRole("heading", { name: "Confirm it's you to sign" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Send verification code", exact: true }),
+  ).toHaveCount(0);
+  await capture(page, "authenticator-desktop");
+  await page
+    .getByRole("button", { name: "Email me a code instead", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Verify your email to sign" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Send verification code", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", {
+      name: "Use my authenticator app instead",
+      exact: true,
+    })
+    .click();
+  const field = page.getByLabel("Authenticator code", { exact: true });
+  await field.fill("12345");
+  await expect(
+    page.getByRole("button", { name: "Verify and open document", exact: true }),
+  ).toBeDisabled();
+  await field.fill("123456");
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await capture(page, "authenticator-mobile");
+  await page
+    .getByRole("button", { name: "Verify and open document", exact: true })
+    .click();
+  await expect(page.locator(".pdf-overlay")).toBeVisible();
+  expect(state.proofs).toEqual([
+    { path: "authenticator", body: { revision: 2, code: "123456" } },
+  ]);
+});
+
+test("a signed-in account confirmed with its authenticator continues in one step", async ({
+  page,
+}) => {
+  const state = {
+    verified: false,
+    failedPdf: false,
+    signed: false,
+    deliveryAvailable: true,
+    authenticatorAvailable: true,
+    accountSession: true,
+    proofs: [] as Array<{ path: string; body: Record<string, unknown> }>,
+  };
+  await mockRequest(page, state);
+  await page.goto(`/sign/${token}`);
+  await expect(
+    page.getByRole("heading", { name: "Confirm it's you to sign" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Use an email code instead" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Never share your code", { exact: false }),
+  ).toHaveCount(0);
+  await capture(page, "account-session-desktop");
+  await page
+    .getByRole("button", { name: "Continue to the document", exact: true })
+    .click();
+  await expect(page.locator(".pdf-overlay")).toBeVisible();
+  expect(state.proofs).toEqual([{ path: "account", body: { revision: 2 } }]);
 });

@@ -41,6 +41,7 @@ import {
   newId,
   formatDate,
   formatShortDate,
+  currentUser,
 } from "../api";
 import { fitPdfText, normalizePdfText } from "../../shared/pdf-text";
 import type {
@@ -152,6 +153,8 @@ const activeCount = computed(
 const currentSigner = computed(() =>
   invitations.value.find((invitation) => invitation.canSign),
 );
+const isMine = (invitation: Invitation) =>
+  invitation.email.toLowerCase() === currentUser.value?.email.toLowerCase();
 const expiredSigner = computed(() =>
   invitations.value.find(
     (invitation) => invitation.signingStatus === "expired",
@@ -1323,6 +1326,14 @@ async function sendEmail() {
                   >
                     <RefreshCw :size="15" />Renew link
                   </button>
+                  <!-- Your own turn: no link to copy or email to yourself. -->
+                  <a
+                    v-else-if="isMine(invitation) && invitation.canSign"
+                    class="button small primary"
+                    :href="invitation.url"
+                    :aria-label="`Sign now as ${invitation.name}`"
+                    ><PenLine :size="15" />Sign now</a
+                  >
                   <template v-else>
                     <CopyField
                       :value="invitation.url!"

@@ -7,9 +7,13 @@ import {
 } from "node:crypto";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { and, eq, gte, isNull, sql } from "drizzle-orm";
+import { fromNodeHeaders } from "better-auth/node";
+import { symmetricDecrypt } from "better-auth/crypto";
+import { auth } from "./auth.js";
 import { config } from "./config.js";
 import { db } from "./db.js";
-import { documents, invitations } from "./schema.js";
+import { documents, invitations, user } from "./schema.js";
+import { twoFactor } from "./account-security-schema.js";
 import { signerVerifications } from "./signer-verification-schema.js";
 import { sha256 } from "./storage.js";
 import { mailConfigured, sendSecurityMail } from "./mail.js";
@@ -26,9 +30,28 @@ type VerificationDb = Pick<
   typeof db,
   "select" | "insert" | "update" | "execute"
 >;
+export type SignerAuthentication = {
+  verificationId: string;
+  email: string;
+  verifiedAt: string;
+} & (
+  | { method: "email-one-time-code" }
+  | {
+      method: "account-authenticator";
+      factor: "code" | "session";
+      accountId: string;
+    }
+);
 const CODE_TTL = 10 * 60_000;
 const GRANT_TTL = 30 * 60_000;
 const MAX_ATTEMPTS = 5;
+// Failed authenticator codes allowed per hour, for one request and for one
+// account across all requests sent to it.
+const AUTHENTICATOR_FAILURES_PER_REQUEST = 5;
+const AUTHENTICATOR_FAILURES_PER_ACCOUNT = 10;
+// Better Auth's TOTP defaults, which PaperSign uses: 30-second steps, six
+// digits, HMAC-SHA1, one step of clock drift either way.
+const TOTP_PERIOD = 30_000;
 const fail = (statusCode: number, message: string): never => {
   throw Object.assign(new Error(message), { statusCode, publicError: true });
 };
@@ -133,11 +156,89 @@ async function browserChallenge(
   return row;
 }
 
+/** The PaperSign account that can prove this address with its authenticator. */
+async function authenticatorAccount(
+  email: string,
+  reader: VerificationDb = db,
+) {
+  const [account] = await reader
+    .select({
+      id: user.id,
+      secret: twoFactor.secret,
+      lockedUntil: twoFactor.lockedUntil,
+    })
+    .from(user)
+    .innerJoin(twoFactor, eq(twoFactor.userId, user.id))
+    .where(
+      and(
+        sql`lower(${user.email}) = ${email.toLowerCase()}`,
+        eq(user.emailVerified, true),
+        eq(user.twoFactorEnabled, true),
+        isNull(user.deletionRequestedAt),
+        eq(twoFactor.verified, true),
+      ),
+    )
+    .limit(1);
+  return account;
+}
+/** A signed-in session for the invited address, confirmed with the authenticator. */
+async function confirmedSession(
+  req: FastifyRequest,
+  context: VerificationContext,
+) {
+  const active = await auth.api
+    .getSession({ headers: fromNodeHeaders(req.headers) })
+    .catch(() => null);
+  if (
+    !active ||
+    active.user.email.toLowerCase() !== context.email.toLowerCase() ||
+    !active.user.emailVerified ||
+    !active.user.twoFactorEnabled ||
+    !(active.session as { mfaVerified?: boolean }).mfaVerified
+  )
+    return;
+  return active;
+}
+function hotp(secret: string, counter: number) {
+  const message = Buffer.alloc(8);
+  message.writeBigUInt64BE(BigInt(counter));
+  const mac = createHmac("sha1", Buffer.from(secret, "utf8"))
+    .update(message)
+    .digest();
+  const offset = mac[mac.length - 1] & 15;
+  return String((mac.readUInt32BE(offset) & 0x7fffffff) % 1_000_000).padStart(
+    6,
+    "0",
+  );
+}
+/** The time step the code belongs to, or undefined. Checks every step, so timing does not reveal which. */
+function matchingStep(secret: string, code: string, now: number) {
+  const current = Math.floor(now / TOTP_PERIOD);
+  let matched: number | undefined;
+  for (const step of [current - 1, current, current + 1]) {
+    const equal = timingSafeEqual(
+      Buffer.from(hotp(secret, step)),
+      Buffer.from(code),
+    );
+    if (equal && matched === undefined) matched = step;
+  }
+  return matched;
+}
+
 export async function verificationStatus(
   req: FastifyRequest,
   context: VerificationContext,
 ) {
   const row = await browserChallenge(req, context);
+  // Account proofs are offered for signing only. The signing record keeps
+  // its email check.
+  const signing = context.purpose === "sign";
+  const [account, session] = signing
+    ? await Promise.all([
+        authenticatorAccount(context.email),
+        confirmedSession(req, context),
+      ])
+    : [undefined, undefined];
   return {
     required: true as const,
     verified: Boolean(
@@ -148,6 +249,8 @@ export async function verificationStatus(
     ),
     emailHint: maskedEmail(context.email),
     deliveryAvailable: mailConfigured(),
+    authenticatorAvailable: Boolean(account),
+    accountSession: Boolean(session),
   };
 }
 
@@ -178,6 +281,7 @@ export async function sendVerificationCode(
       .where(
         and(
           eq(signerVerifications.invitationId, context.invitationId),
+          eq(signerVerifications.method, "email-one-time-code"),
           gte(
             signerVerifications.sentAt,
             new Date(now.getTime() - 24 * 60 * 60_000),
@@ -302,11 +406,169 @@ export async function confirmVerificationCode(
   return { verified: true };
 }
 
+async function replaceBrowserChallenge(
+  tx: VerificationDb,
+  req: FastifyRequest,
+  context: VerificationContext,
+) {
+  // A new proof replaces this browser's earlier challenge for the request.
+  const previous = await browserChallenge(req, context, tx);
+  if (previous && !previous.consumedAt)
+    await tx
+      .update(signerVerifications)
+      .set({ consumedAt: new Date(), codeHash: null })
+      .where(eq(signerVerifications.id, previous.id));
+}
+
+/** Proves the invited address with the six-digit code from the account's authenticator. */
+export async function confirmAuthenticatorCode(
+  req: FastifyRequest,
+  reply: FastifyReply,
+  context: VerificationContext,
+  code: string,
+) {
+  const account = await authenticatorAccount(context.email);
+  if (!account) fail(400, "Use an email code to verify this address.");
+  if (account!.lockedUntil && account!.lockedUntil > new Date())
+    fail(
+      429,
+      "Your authenticator is locked for a while after failed attempts. Use an email code instead.",
+    );
+  const secret = await symmetricDecrypt({
+    key: (await auth.$context).secretConfig,
+    data: account!.secret,
+  });
+  const now = new Date(),
+    step = /^\d{6}$/.test(code)
+      ? matchingStep(secret, code, now.getTime())
+      : undefined;
+  const id = randomUUID(),
+    browserSecret = randomBytes(32).toString("base64url");
+  const outcome = await db.transaction(async (tx) => {
+    await lockContext(tx, context);
+    // One account's attempts are serialised, so the limits and the
+    // single-use check below cannot be raced.
+    await tx.execute(
+      sql`select id from "user" where id = ${account!.id} for update`,
+    );
+    const [failures] = await tx
+      .select({
+        request: sql<number>`count(*) filter (where ${signerVerifications.invitationId} = ${context.invitationId})::int`,
+        account: sql<number>`count(*)::int`,
+      })
+      .from(signerVerifications)
+      .where(
+        and(
+          eq(signerVerifications.userId, account!.id),
+          eq(signerVerifications.method, "account-authenticator"),
+          eq(signerVerifications.factor, "code"),
+          isNull(signerVerifications.verifiedAt),
+          gte(
+            signerVerifications.sentAt,
+            new Date(now.getTime() - 60 * 60_000),
+          ),
+        ),
+      );
+    if (
+      failures.request >= AUTHENTICATOR_FAILURES_PER_REQUEST ||
+      failures.account >= AUTHENTICATOR_FAILURES_PER_ACCOUNT
+    )
+      return "limited" as const;
+    let accepted = step !== undefined;
+    if (accepted) {
+      const [used] = await tx
+        .select({ id: signerVerifications.id })
+        .from(signerVerifications)
+        .where(
+          and(
+            eq(signerVerifications.userId, account!.id),
+            eq(signerVerifications.totpStep, step!),
+          ),
+        )
+        .limit(1);
+      accepted = !used;
+    }
+    if (accepted) await replaceBrowserChallenge(tx, req, context);
+    await tx.insert(signerVerifications).values({
+      id,
+      invitationId: context.invitationId,
+      documentId: context.documentId,
+      revision: context.revision,
+      email: context.email.toLowerCase(),
+      purpose: context.purpose,
+      method: "account-authenticator",
+      factor: "code",
+      userId: account!.id,
+      secretHash: sha256(browserSecret),
+      attempts: 1,
+      sentAt: now,
+      deliveredAt: now,
+      verifiedAt: accepted ? now : null,
+      consumedAt: accepted ? null : now,
+      totpStep: accepted ? step! : null,
+      expiresAt: accepted ? new Date(now.getTime() + GRANT_TTL) : now,
+    });
+    return accepted ? ("verified" as const) : ("rejected" as const);
+  });
+  // Throw after committing, so failed attempts cannot roll themselves back.
+  if (outcome === "limited")
+    fail(
+      429,
+      "Too many authenticator codes were tried. Use an email code or try again in an hour.",
+    );
+  if (outcome === "rejected")
+    fail(
+      400,
+      "That code is incorrect or was already used. Wait for a new code in your authenticator app.",
+    );
+  setBrowserCredential(reply, context, `${id}.${browserSecret}`);
+  return { verified: true };
+}
+
+/** Proves the invited address with a session that was confirmed with the authenticator. */
+export async function confirmAccountSession(
+  req: FastifyRequest,
+  reply: FastifyReply,
+  context: VerificationContext,
+) {
+  const active = await confirmedSession(req, context);
+  if (!active)
+    fail(
+      403,
+      "Sign in with the invited email address and your authenticator first.",
+    );
+  const id = randomUUID(),
+    browserSecret = randomBytes(32).toString("base64url"),
+    now = new Date();
+  await db.transaction(async (tx) => {
+    await lockContext(tx, context);
+    await replaceBrowserChallenge(tx, req, context);
+    await tx.insert(signerVerifications).values({
+      id,
+      invitationId: context.invitationId,
+      documentId: context.documentId,
+      revision: context.revision,
+      email: context.email.toLowerCase(),
+      purpose: context.purpose,
+      method: "account-authenticator",
+      factor: "session",
+      userId: active!.user.id,
+      secretHash: sha256(browserSecret),
+      sentAt: now,
+      deliveredAt: now,
+      verifiedAt: now,
+      expiresAt: new Date(now.getTime() + GRANT_TTL),
+    });
+  });
+  setBrowserCredential(reply, context, `${id}.${browserSecret}`);
+  return { verified: true };
+}
+
 export async function requireVerifiedMailbox(
   req: FastifyRequest,
   context: VerificationContext,
   reader: VerificationDb = db,
-) {
+): Promise<SignerAuthentication> {
   const row = await browserChallenge(req, context, reader);
   if (
     !row?.verifiedAt ||
@@ -318,12 +580,19 @@ export async function requireVerifiedMailbox(
       403,
       "Verify the invited email address in this browser before continuing.",
     );
-  return {
+  const proof = {
     verificationId: row!.id,
     email: row!.email,
     verifiedAt: row!.verifiedAt!.toISOString(),
-    method: "email-one-time-code" as const,
   };
+  if (row!.method === "account-authenticator")
+    return {
+      ...proof,
+      method: "account-authenticator",
+      factor: row!.factor === "session" ? "session" : "code",
+      accountId: row!.userId!,
+    };
+  return { ...proof, method: "email-one-time-code" };
 }
 export async function consumeSignerVerification(
   reader: VerificationDb,

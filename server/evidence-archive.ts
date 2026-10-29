@@ -8,6 +8,21 @@ import { db } from "./db.js";
 import { evidenceTimestamps } from "./evidence-schema.js";
 import type { ManifestTimestamp } from "./evidence-timestamp-core.js";
 
+function authenticationLine(auth: {
+  method: string;
+  verifiedAt?: string;
+  checkedAt?: string;
+  factor?: string;
+}) {
+  if (auth.method === "verified-account")
+    return `Verified account email status checked at: ${auth.checkedAt}`;
+  if (auth.method === "account-authenticator" && auth.factor === "session")
+    return `Signed-in PaperSign account, confirmed with its authenticator, checked at: ${auth.verifiedAt}`;
+  if (auth.method === "account-authenticator")
+    return `PaperSign account authenticator code verified at: ${auth.verifiedAt}`;
+  return `Mailbox code verified at: ${auth.verifiedAt}`;
+}
+
 export function evidenceReport(
   manifest: EvidenceManifest,
   receipt: EvidenceReceipt,
@@ -52,14 +67,13 @@ export function evidenceReport(
       email: string;
       verifiedAt?: string;
       checkedAt?: string;
+      factor?: string;
     };
     lines.push(
       `Accepted by: ${record.body.statedName}`,
       `Email: ${auth.email}`,
       `Authentication: ${auth.method}`,
-      auth.method === "verified-account"
-        ? `Verified account email status checked at: ${auth.checkedAt}`
-        : `Mailbox code verified at: ${auth.verifiedAt}`,
+      authenticationLine(auth),
       `Accepted at: ${record.createdAt}`,
       `Reviewed revision: ${record.revision}`,
       `Reviewed PDF SHA-256: ${record.body.reviewedPdfSha256}`,

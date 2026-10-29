@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Download,
   ArrowRight,
+  ShieldCheck,
 } from "@lucide/vue";
 import PdfStage from "../components/PdfStage.vue";
 import PlacementBox from "../components/PlacementBox.vue";
@@ -62,6 +63,28 @@ const verificationBase = computed(
   () =>
     `/sign/${token}${details.value?.state === "signed" ? "/record" : ""}/verification`,
 );
+// Account holders prove the invited address with their authenticator; the
+// email code stays available as a fallback.
+type VerifyMode = "account" | "authenticator" | "email";
+const chosenMode = ref<VerifyMode>();
+const verifyMode = computed<VerifyMode>(() => {
+  const status = details.value?.verification;
+  if (chosenMode.value) return chosenMode.value;
+  if (status?.accountSession) return "account";
+  if (status?.authenticatorAvailable) return "authenticator";
+  return "email";
+});
+const verifyHeading = computed(() =>
+  verifyMode.value === "email"
+    ? "Verify your email to sign"
+    : "Confirm it's you to sign",
+);
+const authenticatorCode = ref("");
+function chooseMode(mode: VerifyMode) {
+  chosenMode.value = mode;
+  authenticatorCode.value = "";
+  error.value = "";
+}
 const verificationCode = ref(""),
   codeSent = ref(false),
   resendSeconds = ref(0),
@@ -221,6 +244,27 @@ async function verifyCode() {
       }),
     });
     verificationCode.value = "";
+    await load(false);
+  } catch (e) {
+    error.value = errorMessage(e);
+  } finally {
+    busy.value = false;
+  }
+}
+async function verifyWith(proof: "account" | "authenticator") {
+  if (!details.value) return;
+  busy.value = true;
+  error.value = "";
+  const body: { revision: number; code?: string } = {
+    revision: details.value.revision,
+  };
+  if (proof === "authenticator") body.code = authenticatorCode.value;
+  try {
+    await api(`/sign/${token}/verification/${proof}`, {
+      method: "POST",
+      body: json(body),
+    });
+    authenticatorCode.value = "";
     await load(false);
   } catch (e) {
     error.value = errorMessage(e);
@@ -595,30 +639,49 @@ async function sign() {
         class="sign-verification panel"
         aria-labelledby="verify-email-heading"
       >
-        <span class="completion-icon"><Mail :size="28" /></span>
-        <h1 id="verify-email-heading">Verify your email to sign</h1>
+        <span class="completion-icon"
+          ><Mail v-if="verifyMode === 'email'" :size="28" /><ShieldCheck
+            v-else
+            :size="28"
+        /></span>
+        <h1 id="verify-email-heading">{{ verifyHeading }}</h1>
         <p class="verify-document">{{ details.documentName }}</p>
-        <p class="verify-intro">
-          {{ codeSent ? "We sent" : "We will send" }} a one-time code to
-          <strong>{{ details.verification?.emailHint }}</strong>. Enter it here
-          to open the document and add your signature.
-        </p>
-        <p
-          v-if="!details.verification?.deliveryAvailable"
-          class="notice error"
-          role="alert"
-        >
-          Email verification is unavailable. Ask the sender to contact the
-          PaperSign administrator.
-        </p>
-        <template v-else>
+        <template v-if="verifyMode === 'account'">
+          <p class="verify-intro">
+            You are signed in to PaperSign as
+            <strong>{{
+              currentUser?.email || details.verification?.emailHint
+            }}</strong
+            >, the address this request was sent to.
+          </p>
           <p v-if="error" class="notice error" role="alert">{{ error }}</p>
-          <form v-if="codeSent" @submit.prevent="verifyCode">
-            <label class="field" for="signer-code"
-              >Email verification code
+          <button
+            class="button primary full"
+            :disabled="busy"
+            @click="verifyWith('account')"
+          >
+            {{ busy ? "Opening…" : "Continue to the document" }}
+          </button>
+          <button
+            class="text-button verify-switch"
+            :disabled="busy"
+            @click="chooseMode('email')"
+          >
+            Use an email code instead
+          </button>
+        </template>
+        <template v-else-if="verifyMode === 'authenticator'">
+          <p class="verify-intro">
+            This address has a PaperSign account with two-step verification.
+            Enter the code from your authenticator app to open the document.
+          </p>
+          <p v-if="error" class="notice error" role="alert">{{ error }}</p>
+          <form @submit.prevent="verifyWith('authenticator')">
+            <label class="field" for="signer-authenticator-code"
+              >Authenticator code
               <input
-                id="signer-code"
-                v-model="verificationCode"
+                id="signer-authenticator-code"
+                v-model="authenticatorCode"
                 class="code-input"
                 type="text"
                 inputmode="numeric"
@@ -628,37 +691,98 @@ async function sign() {
                 maxlength="6"
                 required
                 :disabled="busy"
-                aria-describedby="signer-code-help"
+                aria-describedby="signer-authenticator-help"
               />
             </label>
-            <p id="signer-code-help" class="hint">
-              The six-digit code expires in 10 minutes. Keep this browser tab
-              open and check your spam folder if needed.
+            <p id="signer-authenticator-help" class="hint">
+              Use the six-digit PaperSign code. Each code works once.
             </p>
             <button
               class="button primary full"
-              :disabled="busy || !/^\d{6}$/.test(verificationCode)"
+              :disabled="busy || !/^\d{6}$/.test(authenticatorCode)"
             >
               {{ busy ? "Verifying…" : "Verify and open document" }}
             </button>
           </form>
           <button
-            :class="codeSent ? 'text-button resend' : 'button primary full'"
-            :disabled="busy || resendSeconds > 0"
-            @click="sendCode"
+            class="text-button verify-switch"
+            :disabled="busy"
+            @click="chooseMode('email')"
           >
-            {{
-              resendSeconds > 0
-                ? `Send another code in ${resendSeconds}s`
-                : codeSent
-                  ? "Send another code"
-                  : busy
-                    ? "Sending code…"
-                    : "Send verification code"
-            }}
+            Email me a code instead
           </button>
         </template>
-        <p class="hint verify-footnote">
+        <template v-else>
+          <p class="verify-intro">
+            {{ codeSent ? "We sent" : "We will send" }} a one-time code to
+            <strong>{{ details.verification?.emailHint }}</strong
+            >. Enter it here to open the document and add your signature.
+          </p>
+          <p
+            v-if="!details.verification?.deliveryAvailable"
+            class="notice error"
+            role="alert"
+          >
+            Email verification is unavailable. Ask the sender to contact the
+            PaperSign administrator.
+          </p>
+          <template v-else>
+            <p v-if="error" class="notice error" role="alert">{{ error }}</p>
+            <form v-if="codeSent" @submit.prevent="verifyCode">
+              <label class="field" for="signer-code"
+                >Email verification code
+                <input
+                  id="signer-code"
+                  v-model="verificationCode"
+                  class="code-input"
+                  type="text"
+                  inputmode="numeric"
+                  autocomplete="one-time-code"
+                  pattern="[0-9]{6}"
+                  minlength="6"
+                  maxlength="6"
+                  required
+                  :disabled="busy"
+                  aria-describedby="signer-code-help"
+                />
+              </label>
+              <p id="signer-code-help" class="hint">
+                The six-digit code expires in 10 minutes. Keep this browser tab
+                open and check your spam folder if needed.
+              </p>
+              <button
+                class="button primary full"
+                :disabled="busy || !/^\d{6}$/.test(verificationCode)"
+              >
+                {{ busy ? "Verifying…" : "Verify and open document" }}
+              </button>
+            </form>
+            <button
+              :class="codeSent ? 'text-button resend' : 'button primary full'"
+              :disabled="busy || resendSeconds > 0"
+              @click="sendCode"
+            >
+              {{
+                resendSeconds > 0
+                  ? `Send another code in ${resendSeconds}s`
+                  : codeSent
+                    ? "Send another code"
+                    : busy
+                      ? "Sending code…"
+                      : "Send verification code"
+              }}
+            </button>
+          </template>
+          <button
+            v-if="details.verification?.authenticatorAvailable"
+            class="text-button verify-switch"
+            :disabled="busy"
+            @click="chooseMode('authenticator')"
+          >
+            Use my authenticator app instead
+          </button>
+        </template>
+        <p v-if="verifyMode !== 'account'" class="hint verify-footnote">
           Never share your code with anyone, including the sender.
         </p>
       </section>
@@ -942,7 +1066,8 @@ async function sign() {
 .sign-verification > .button {
   margin-top: 30px;
 }
-.resend {
+.resend,
+.verify-switch {
   display: flex;
   width: fit-content;
   margin: 14px auto 0;

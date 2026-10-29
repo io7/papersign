@@ -162,6 +162,29 @@ test("an expired link offers Renew, and a revoked signer keeps their place witho
   await capture(page, "expired-revoked-1440");
 });
 
+test("the sender's own turn offers Sign now instead of a link to copy or email", async ({
+  page,
+}) => {
+  // The editor fixture is signed in as editor@example.invalid.
+  const steps = await openPanel(page, [
+    signer(1, "Editor QA", "ready"),
+    signer(2, "Jonas Ekberg", "waiting"),
+  ]);
+  await expect(
+    steps.nth(0).getByRole("link", { name: "Sign now as Editor QA" }),
+  ).toHaveAttribute("href", "http://127.0.0.1:5176/sign/fixture-link-1");
+  await expect(
+    steps.nth(0).getByRole("button", { name: /^Copy link|^Email/ }),
+  ).toHaveCount(0);
+  await expect(
+    steps.nth(1).getByRole("link", { name: /^Sign now/ }),
+  ).toHaveCount(0);
+  await expect(
+    steps.nth(1).getByRole("button", { name: "Copy link for Jonas Ekberg" }),
+  ).toBeVisible();
+  await capture(page, "own-turn-1440");
+});
+
 test("when copying fails, the link box appears with the link selected", async ({
   page,
 }) => {

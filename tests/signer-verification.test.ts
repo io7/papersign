@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 const mailbox = vi.hoisted(() => ({
@@ -138,6 +138,74 @@ async function reviewed(browser: Browser, f: Fixture) {
   expect(pdf.statusCode, pdf.body).toBe(200);
   expect(pdf.headers["x-papersign-review-sha256"]).toBe(sha256(pdf.rawPayload));
   return String(pdf.headers["x-papersign-review"]);
+}
+function totp(uri: string) {
+  const encoded = new URL(uri).searchParams.get("secret")!;
+  let bits = "";
+  for (const char of encoded.replace(/=+$/, ""))
+    bits += "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+      .indexOf(char.toUpperCase())
+      .toString(2)
+      .padStart(5, "0");
+  const key = Buffer.from(
+    bits.match(/.{8}/g)!.map((byte) => parseInt(byte, 2)),
+  );
+  const counter = Buffer.alloc(8);
+  counter.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30_000)));
+  const hash = createHmac("sha1", key).update(counter).digest();
+  const offset = hash.at(-1)! & 15;
+  return String((hash.readUInt32BE(offset) & 0x7fffffff) % 1_000_000).padStart(
+    6,
+    "0",
+  );
+}
+/** A PaperSign account for the invited address, signed in, with an authenticator unless told otherwise. */
+async function signerAccount(email: string, enroll = true) {
+  const browser = new Browser(),
+    password = `Signer-account-${randomUUID()}!`;
+  const created = await browser.request("/auth/sign-up/email", {
+    name: "Invited signer",
+    email,
+    password,
+  });
+  expect(created.statusCode, created.body).toBe(200);
+  const record = await db.query.user.findFirst({
+    where: eq(user.email, email),
+  });
+  ownedUsers.push(record!.id);
+  await db
+    .update(user)
+    .set({ emailVerified: true })
+    .where(eq(user.id, record!.id));
+  const signedIn = await browser.request("/auth/sign-in/email", {
+    email,
+    password,
+  });
+  expect(signedIn.statusCode, signedIn.body).toBe(200);
+  if (!enroll) return { browser, id: record!.id, uri: "" };
+  const setup = await browser.request("/auth/two-factor/enable", {
+    password,
+    method: "totp",
+  });
+  expect(setup.statusCode, setup.body).toBe(200);
+  const uri = setup.json().totpURI as string;
+  const confirmed = await browser.request("/auth/two-factor/verify-totp", {
+    code: totp(uri),
+  });
+  expect(confirmed.statusCode, confirmed.body).toBe(200);
+  return { browser, id: record!.id, uri };
+}
+async function signedAuthentication(f: Fixture) {
+  const [record] = await db
+    .select()
+    .from(evidenceRecords)
+    .where(
+      and(
+        eq(evidenceRecords.documentId, f.documentId),
+        eq(evidenceRecords.kind, "acceptance"),
+      ),
+    );
+  return record.body.authentication as Record<string, unknown>;
 }
 function acceptance(f: Fixture, reviewId = randomUUID()) {
   return {
@@ -501,5 +569,149 @@ describe("Recipient mailbox proof and immutable acceptance", () => {
       (await browser.request(`/sign/${f.token}`, acceptance(f, reviewId)))
         .statusCode,
     ).toBe(404);
+  });
+});
+describe("Account holders prove the invited address with their authenticator", () => {
+  it("accepts the account's authenticator code once and records it as the proof", async () => {
+    const f = await fixture(),
+      account = await signerAccount(f.email),
+      signer = new Browser();
+    const status = (await signer.request(`/sign/${f.token}`)).json()
+      .verification;
+    expect(status).toMatchObject({
+      verified: false,
+      authenticatorAvailable: true,
+      accountSession: false,
+    });
+    const code = totp(account.uri);
+    const accepted = await signer.request(
+      `/sign/${f.token}/verification/authenticator`,
+      { revision: f.revision, code },
+    );
+    expect(accepted.statusCode, accepted.body).toBe(200);
+    expect(accepted.headers["set-cookie"]).toContain("HttpOnly");
+    // The same code cannot open the request a second time.
+    const replay = await new Browser().request(
+      `/sign/${f.token}/verification/authenticator`,
+      { revision: f.revision, code },
+    );
+    expect(replay.statusCode).toBe(400);
+    expect(
+      (await signer.request(`/sign/${f.token}`)).json().verification.verified,
+    ).toBe(true);
+    const reviewId = await reviewed(signer, f);
+    const signed = await signer.request(
+      `/sign/${f.token}`,
+      acceptance(f, reviewId),
+    );
+    expect(signed.statusCode, signed.body).toBe(200);
+    expect(await signedAuthentication(f)).toMatchObject({
+      method: "account-authenticator",
+      factor: "code",
+      accountId: account.id,
+      email: f.email,
+    });
+    // No email was needed.
+    expect(
+      mailbox.messages.some(
+        (mail) =>
+          mail.to === f.email && mail.subject.includes("verification code"),
+      ),
+    ).toBe(false);
+  });
+  it("limits wrong codes per request and offers nothing to addresses without an authenticator", async () => {
+    const f = await fixture(),
+      account = await signerAccount(f.email);
+    const right = totp(account.uri),
+      wrong = right === "000000" ? "000001" : "000000";
+    for (let i = 0; i < 5; i++)
+      expect(
+        (
+          await new Browser().request(
+            `/sign/${f.token}/verification/authenticator`,
+            { revision: f.revision, code: wrong },
+          )
+        ).statusCode,
+      ).toBe(400);
+    expect(
+      (
+        await new Browser().request(
+          `/sign/${f.token}/verification/authenticator`,
+          { revision: f.revision, code: right },
+        )
+      ).statusCode,
+    ).toBe(429);
+    // The email code still works after the authenticator is locked out.
+    await verify(new Browser(), f);
+    const plain = await fixture();
+    await signerAccount(plain.email, false);
+    expect(
+      (await new Browser().request(`/sign/${plain.token}`)).json().verification,
+    ).toMatchObject({ authenticatorAvailable: false, accountSession: false });
+    expect(
+      (
+        await new Browser().request(
+          `/sign/${plain.token}/verification/authenticator`,
+          { revision: plain.revision, code: right },
+        )
+      ).statusCode,
+    ).toBe(400);
+  });
+  it("lets a session confirmed with the authenticator continue without a code, but not a password-only one", async () => {
+    const f = await fixture(),
+      account = await signerAccount(f.email);
+    expect(
+      (await account.browser.request(`/sign/${f.token}`)).json().verification
+        .accountSession,
+    ).toBe(true);
+    expect(
+      (
+        await new Browser().request(`/sign/${f.token}/verification/account`, {
+          revision: f.revision,
+        })
+      ).statusCode,
+    ).toBe(403);
+    const continued = await account.browser.request(
+      `/sign/${f.token}/verification/account`,
+      { revision: f.revision },
+    );
+    expect(continued.statusCode, continued.body).toBe(200);
+    const reviewId = await reviewed(account.browser, f);
+    expect(
+      (
+        await account.browser.request(
+          `/sign/${f.token}`,
+          acceptance(f, reviewId),
+        )
+      ).statusCode,
+    ).toBe(200);
+    expect(await signedAuthentication(f)).toMatchObject({
+      method: "account-authenticator",
+      factor: "session",
+      accountId: account.id,
+    });
+    const plain = await fixture(),
+      passwordOnly = await signerAccount(plain.email, false);
+    expect(
+      (await passwordOnly.browser.request(`/sign/${plain.token}`)).json()
+        .verification.accountSession,
+    ).toBe(false);
+    expect(
+      (
+        await passwordOnly.browser.request(
+          `/sign/${plain.token}/verification/account`,
+          { revision: plain.revision },
+        )
+      ).statusCode,
+    ).toBe(403);
+    // A confirmed session for someone else's address does not count.
+    expect(
+      (
+        await account.browser.request(
+          `/sign/${plain.token}/verification/account`,
+          { revision: plain.revision },
+        )
+      ).statusCode,
+    ).toBe(403);
   });
 });

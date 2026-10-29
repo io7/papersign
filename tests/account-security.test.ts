@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createHmac, randomUUID } from "node:crypto";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, like } from "drizzle-orm";
 import Fastify from "fastify";
 
 const mailbox = vi.hoisted(() => ({
@@ -17,7 +17,7 @@ vi.mock("../server/mail.js", () => ({
     mailbox.messages.push(message);
   },
 }));
-import { auth } from "../server/auth.js";
+import { auth, REMEMBERED_BROWSER_SECONDS } from "../server/auth.js";
 import { config } from "../server/config.js";
 import { db, pool } from "../server/db.js";
 import { twoFactor } from "../server/account-security-schema.js";
@@ -326,10 +326,11 @@ describe("Authenticator protection", () => {
       ).body.twoFactorRedirect,
     ).toBe(true);
     expect(await login.session()).toBeNull();
+    // A recovery code cannot remember the browser.
     expect(
       (
-        await login.request("/two-factor/verify-totp", {
-          code: totp(setup.totpURI),
+        await login.request("/two-factor/verify-backup-code", {
+          code: setup.backupCodes[0],
           trustDevice: true,
         })
       ).status,
@@ -416,6 +417,139 @@ describe("Authenticator protection", () => {
         .status,
     ).toBe(403);
     expect((await account.browser.session()).user.twoFactorEnabled).toBe(true);
+  });
+});
+
+describe("Remembered browsers", () => {
+  const rememberedRows = (userId: string) =>
+    db
+      .select()
+      .from(verification)
+      .where(
+        and(
+          eq(verification.value, userId),
+          like(verification.identifier, "trust-device-%"),
+        ),
+      );
+  async function rememberedLogin(email: string, uri: string) {
+    const browser = new Browser();
+    expect(
+      (await browser.request("/sign-in/email", { email, password })).body
+        .twoFactorRedirect,
+    ).toBe(true);
+    expect(
+      (
+        await browser.request("/two-factor/verify-totp", {
+          code: totp(uri),
+          trustDevice: true,
+        })
+      ).status,
+    ).toBe(200);
+    return browser;
+  }
+  it("skips the code for 7 days from the first code, without Admin access", async () => {
+    const account = await createAccount();
+    const setup = await enroll(account.browser);
+    const browser = await rememberedLogin(account.email, setup.totpURI);
+    expect((await browser.session()).session.mfaVerified).toBe(true);
+    const [first] = await rememberedRows(account.id);
+    const days =
+      (first.expiresAt.getTime() - first.createdAt.getTime()) / 86_400_000;
+    expect(days).toBeCloseTo(REMEMBERED_BROWSER_SECONDS / 86_400, 2);
+    expect((await browser.request("/sign-out", {})).status).toBe(200);
+    const again = await browser.request("/sign-in/email", {
+      email: account.email,
+      password,
+    });
+    expect(again.status).toBe(200);
+    expect(again.body.twoFactorRedirect).toBeFalsy();
+    const active = await browser.session();
+    expect(active.user.id).toBe(account.id);
+    // Remembered, not confirmed: Admin still needs a fresh code.
+    expect(active.session.mfaVerified).toBe(false);
+    expect(() => requireAdminMfa(active)).toThrow();
+    // Better Auth replaced the record; the expiry stays the first one.
+    const renewed = await rememberedRows(account.id);
+    expect(renewed).toHaveLength(1);
+    expect(renewed[0].identifier).not.toBe(first.identifier);
+    expect(renewed[0].expiresAt.getTime()).toBe(first.expiresAt.getTime());
+    // Once the 7 days are over, the code is asked for again.
+    await db
+      .update(verification)
+      .set({ expiresAt: new Date(Date.now() - 1_000) })
+      .where(eq(verification.id, renewed[0].id));
+    await browser.request("/sign-out", {});
+    expect(
+      (
+        await browser.request("/sign-in/email", {
+          email: account.email,
+          password,
+        })
+      ).body.twoFactorRedirect,
+    ).toBe(true);
+  });
+  it("keeps remembered sessions when a code is used elsewhere, and forgets them on request", async () => {
+    const account = await createAccount();
+    const setup = await enroll(account.browser);
+    const remembered = await rememberedLogin(account.email, setup.totpURI);
+    await remembered.request("/sign-out", {});
+    await remembered.request("/sign-in/email", {
+      email: account.email,
+      password,
+    });
+    expect((await remembered.session()).session.mfaVerified).toBe(false);
+    const elsewhere = new Browser();
+    await elsewhere.request("/sign-in/email", {
+      email: account.email,
+      password,
+    });
+    expect(
+      (
+        await elsewhere.request("/two-factor/verify-totp", {
+          code: totp(setup.totpURI),
+        })
+      ).status,
+    ).toBe(200);
+    expect(await remembered.session()).toBeTruthy();
+    const app = Fastify();
+    await registerAccountSecurityRoutes(app);
+    try {
+      const settings = await app.inject({
+        url: "/api/account/security",
+        headers: { cookie: account.browser.cookie },
+      });
+      expect(settings.json().rememberedBrowsers).toBe(1);
+      const forgotten = await app.inject({
+        url: "/api/account/remembered-browsers/forget",
+        method: "POST",
+        headers: { cookie: account.browser.cookie },
+      });
+      expect(forgotten.json().forgotten).toBe(1);
+    } finally {
+      await app.close();
+    }
+    expect(await rememberedRows(account.id)).toHaveLength(0);
+    await remembered.request("/sign-out", {});
+    expect(
+      (
+        await remembered.request("/sign-in/email", {
+          email: account.email,
+          password,
+        })
+      ).body.twoFactorRedirect,
+    ).toBe(true);
+  });
+  it("forgets every remembered browser when the authenticator is turned off", async () => {
+    const account = await createAccount();
+    const setup = await enroll(account.browser);
+    await rememberedLogin(account.email, setup.totpURI);
+    await rememberedLogin(account.email, setup.totpURI);
+    expect(await rememberedRows(account.id)).toHaveLength(2);
+    expect(
+      (await account.browser.request("/two-factor/disable", { password }))
+        .status,
+    ).toBe(200);
+    expect(await rememberedRows(account.id)).toHaveLength(0);
   });
 });
 

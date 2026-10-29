@@ -200,6 +200,28 @@ describe("portable signing evidence", () => {
     deleted.records.splice(0, 1);
     expect(() => verifyEvidenceManifest(deleted)).toThrow("chain was changed");
   });
+  it("accepts an account authenticator proof with its time, and rejects one without", () => {
+    const manifest = fixture().manifest;
+    manifest.records[1].body.authentication = {
+      method: "account-authenticator",
+      factor: "code",
+      accountId: randomUUID(),
+      email: "signer@example.invalid",
+      verifiedAt: "2026-10-22T09:59:00.000Z",
+    };
+    rehash(manifest);
+    expect(() => verifyEvidenceManifest(manifest)).not.toThrow();
+    const timeless = fixture().manifest;
+    timeless.records[1].body.authentication = {
+      method: "account-authenticator",
+      factor: "session",
+      email: "signer@example.invalid",
+    };
+    rehash(timeless);
+    expect(() => verifyEvidenceManifest(timeless)).toThrow(
+      "authentication or signature evidence",
+    );
+  });
   it("rejects a rehashed acceptance borrowed from another signer or revision", () => {
     const manifest = fixture().manifest;
     manifest.records[1].revision++;

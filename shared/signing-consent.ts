@@ -8,4 +8,8 @@ export interface SigningVerification {
   verified: boolean;
   emailHint: string;
   deliveryAvailable: boolean;
+  /** The invited address belongs to a PaperSign account with an authenticator. */
+  authenticatorAvailable: boolean;
+  /** This browser is signed in as that account, confirmed with the authenticator. */
+  accountSession: boolean;
 }

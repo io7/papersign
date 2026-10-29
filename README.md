@@ -72,7 +72,8 @@ restore and upgrades.
 
 - Email/password registration, email verification and password recovery;
   account-owned documents and reusable signatures. Admin access requires an
-  authenticator code, with recovery codes and session management.
+  authenticator code, with recovery codes and session management. A browser
+  can be remembered for 7 days so sign-in skips the code; Admin still asks.
 - PNG upload with automatic white-background removal, and mouse, pen or touch
   drawing with undo, clear and ink color controls. Rename signatures and select
   a default.
@@ -160,7 +161,10 @@ uniformly to fit its box, never below 6 pt. Enlarge the box or shorten the value
 if it does not fit. Each signer can have up to ten required text fields.
 
 You can share all the links immediately. The intended recipient must verify an
-email code before viewing and accepting the document. Only the first unfinished signer can
+email code before viewing and accepting the document. A recipient whose address
+belongs to a PaperSign account with an authenticator can enter the authenticator
+code instead, or continue in one step when already signed in with it; the email
+code stays available. Only the first unfinished signer can
 sign; everyone else sees a waiting screen with **Check again**. Completing one
 signature unlocks the next person's link, and with email configured PaperSign
 tells that person it is their turn. The owner can refresh the signer list

@@ -66,6 +66,8 @@ import {
   verificationStatus,
   sendVerificationCode,
   confirmVerificationCode,
+  confirmAuthenticatorCode,
+  confirmAccountSession,
   requireVerifiedMailbox,
   consumeSignerVerification,
   type VerificationContext,
@@ -1438,6 +1440,57 @@ export async function buildApp() {
         req,
         signerContext(snapshot.invitation, snapshot.document),
         code,
+      );
+    },
+  );
+  // Account holders can prove the invited address with their authenticator
+  // instead of an email code: a code from the app, or a signed-in session
+  // that was confirmed with it.
+  app.post(
+    "/api/sign/:token/verification/authenticator",
+    { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    async (req, reply) => {
+      const { revision, code } = z
+        .object({
+          revision: z.number().int().positive(),
+          code: z.string().regex(/^\d{6}$/),
+        })
+        .parse(req.body);
+      const snapshot = await signingSnapshot(req);
+      if (!snapshot.canSign)
+        fail(409, "This request is not ready for signing.");
+      if (revision !== snapshot.document.revision)
+        fail(
+          409,
+          "This document changed. Reload it before verifying your email.",
+        );
+      return confirmAuthenticatorCode(
+        req,
+        reply,
+        signerContext(snapshot.invitation, snapshot.document),
+        code,
+      );
+    },
+  );
+  app.post(
+    "/api/sign/:token/verification/account",
+    { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    async (req, reply) => {
+      const { revision } = z
+        .object({ revision: z.number().int().positive() })
+        .parse(req.body);
+      const snapshot = await signingSnapshot(req);
+      if (!snapshot.canSign)
+        fail(409, "This request is not ready for signing.");
+      if (revision !== snapshot.document.revision)
+        fail(
+          409,
+          "This document changed. Reload it before verifying your email.",
+        );
+      return confirmAccountSession(
+        req,
+        reply,
+        signerContext(snapshot.invitation, snapshot.document),
       );
     },
   );

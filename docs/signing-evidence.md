@@ -4,7 +4,11 @@ PaperSign preserves a separate, immutable PDF for each review, then records the
 signer's completed fields, signature image(s), exact consent wording/version and
 authentication assertion. Guest authentication records when the email code was
 verified. Account authentication records when the already-verified email status
-was checked; it does not invent an earlier mailbox-verification time.
+was checked; it does not invent an earlier mailbox-verification time. A signer
+who used their PaperSign account's authenticator is recorded as
+`account-authenticator`, with the account, the time and whether a code was
+entered (`code`) or a session confirmed with the authenticator was used
+(`session`). Each authenticator code is accepted for signing only once.
 
 The final ordinary PDF is created automatically and has one canonical export ID.
 Rasterized or later certificate-policy exports do not replace it. Every export
