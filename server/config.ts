@@ -23,6 +23,15 @@ const env = z
     // Plain SMTP is accepted only for a trusted relay on the same private
     // network (for example a mail container in the same compose project).
     SMTP_REQUIRE_TLS: z.enum(["true", "false"]).default("true"),
+    // The name PaperSign gives when it greets the SMTP server (EHLO). Default:
+    // the domain in APP_URL. Some relays, such as Google's, refuse a bare IP.
+    SMTP_EHLO_NAME: z
+      .string()
+      .regex(
+        /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i,
+        "SMTP_EHLO_NAME must be a domain name, such as sign.example.com.",
+      )
+      .optional(),
     // Postmark's HTTP API instead of SMTP. It answers each send at once, so a
     // refused email (sending limit, inactive recipient) shows as failed.
     POSTMARK_SERVER_TOKEN: z.string().min(1).optional(),

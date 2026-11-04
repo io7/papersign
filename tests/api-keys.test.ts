@@ -544,6 +544,50 @@ describe("Admin API keys", () => {
     ).toEqual([null, null]);
   });
 
+  // The local mail sink refuses every non-synthetic recipient (550), which
+  // stands in for a mail server that will not take the message.
+  it("answers a refused invitation email with 503 and the reason", async () => {
+    if (!emailEnabled) return;
+    const form = new FormData();
+    form.append(
+      "file",
+      new Blob([new Uint8Array(await samplePdf(false))], {
+        type: "application/pdf",
+      }),
+      "Refused email QA.pdf",
+    );
+    const uploaded = await request("/documents", admin.cookie, "POST", form);
+    expect(uploaded.status, await uploaded.clone().text()).toBe(201);
+    const document = (await uploaded.json()) as { id: string; revision: number };
+    const created = await request(
+      `/documents/${document.id}/invitations`,
+      admin.cookie,
+      "POST",
+      {
+        revision: document.revision,
+        termsLocked: true,
+        recipients: [
+          {
+            name: "QA refused",
+            email: `${prefix}refused@refused-by-sink.invalid`,
+            field: field(0, 0.5),
+          },
+        ],
+      },
+    );
+    expect(created.status, await created.clone().text()).toBe(201);
+    const [link] = await created.json();
+    const path = `/documents/${document.id}/invitations/${link.id}/email`;
+    const preview = await (await request(path, admin.cookie)).json();
+    const sent = await request(path, admin.cookie, "POST", {
+      previewHash: preview.previewHash,
+    });
+    expect(sent.status).toBe(503);
+    expect((await sent.json()).message).toBe(
+      "Email delivery failed. Please try again later.",
+    );
+  });
+
   it("refuses every route outside the key's scope and ignores session cookies", async () => {
     const { secret } = await createKey("QA scope key");
     const own = await upload(secret);

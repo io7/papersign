@@ -10,6 +10,7 @@ const fixture = vi.hoisted(() => ({
     MAIL_FROM: "PaperSign <noreply@example.test>" as string | undefined,
     SMTP_SECURE: "false",
     SMTP_REQUIRE_TLS: undefined as string | undefined,
+    SMTP_EHLO_NAME: undefined as string | undefined,
     POSTMARK_SERVER_TOKEN: undefined as string | undefined,
     POSTMARK_MESSAGE_STREAM: "outbound",
     ERROR_ALERT_EMAIL: undefined as string | undefined,
@@ -34,6 +35,8 @@ const logged = () =>
 
 beforeEach(() => {
   Object.assign(fixture.config, {
+    APP_URL: "https://papersign.example.test",
+    SMTP_EHLO_NAME: undefined,
     SMTP_HOST: "smtp.example.test",
     MAIL_FROM: "PaperSign <noreply@example.test>",
     POSTMARK_SERVER_TOKEN: undefined,
@@ -108,7 +111,48 @@ describe("Postmark API delivery", () => {
   });
 });
 
+describe("SMTP greeting name", () => {
+  const greeting = () => fixture.createTransport.mock.calls[0][0].name;
+  const send = () =>
+    sendSecurityMail({ to: recipient, subject: "Hello", text: "Body" });
+  it("greets the server with the domain in APP_URL, not [127.0.0.1]", async () => {
+    await send();
+    expect(greeting()).toBe("papersign.example.test");
+  });
+  it("uses SMTP_EHLO_NAME when it is set", async () => {
+    fixture.config.SMTP_EHLO_NAME = "mail.example.test";
+    await send();
+    expect(greeting()).toBe("mail.example.test");
+  });
+  it.each([
+    "http://localhost:5176",
+    "http://127.0.0.1:3176",
+    "http://[::1]:3176",
+  ])("leaves the choice to nodemailer when APP_URL is %s", async (url) => {
+    fixture.config.APP_URL = url;
+    await send();
+    expect(greeting()).toBeUndefined();
+  });
+});
+
 describe("SMTP failure details", () => {
+  it("answers requests with a 503 and a message the person can act on", async () => {
+    fixture.sendMail.mockRejectedValueOnce(
+      Object.assign(new Error("Try again later"), {
+        code: "ECONNECTION",
+        command: "EHLO",
+        responseCode: 421,
+      }),
+    );
+    await expect(send()).rejects.toMatchObject({
+      statusCode: 503,
+      publicError: true,
+      message: "Email delivery failed. Please try again later.",
+    });
+    function send() {
+      return sendSecurityMail({ to: recipient, subject: "Hi", text: "Body" });
+    }
+  });
   const authError = Object.assign(new Error("Invalid login"), {
     code: "EAUTH",
     command: "AUTH PLAIN",

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const fixture = vi.hoisted(() => ({
   config: {
+    APP_URL: "https://papersign.example.test",
     SMTP_HOST: "smtp.example.test",
     SMTP_PORT: 587,
     SMTP_USER: "fixture",

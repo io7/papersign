@@ -353,8 +353,10 @@ public registration; valid account invitations can still be accepted.
 Verification, password recovery and recipient signing need working mail
 delivery and fail closed without it. PaperSign sends through any SMTP server or
 relay (`SMTP_HOST`), or through Postmark's HTTP API (`POSTMARK_SERVER_TOKEN`),
-which reports a refused message at once instead of dropping it later. Confirm
-the provider, sender/domain configuration and actual delivery before production
+which reports a refused message at once instead of dropping it later. Over
+SMTP, PaperSign greets the server with the domain in `APP_URL`
+(`SMTP_EHLO_NAME` overrides it); Google's SMTP relay refuses most greetings
+without a domain name. Confirm the provider, sender/domain configuration and actual delivery before production
 use. Manually initiated
 invitation emails show recipients, subject and body before sending;
 user-requested verification and recovery messages are sent by their respective

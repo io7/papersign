@@ -31,12 +31,32 @@ class DeliveryError extends Error {
     super("Email delivery failed.");
   }
 }
+/**
+ * What request handlers see when email cannot be sent: a 503 with a message
+ * the person can act on. The failure itself was already reported, so the
+ * server's error handler does not report it again as a failed request.
+ */
+const unavailable = (message: string) =>
+  Object.assign(new Error(message), { statusCode: 503, publicError: true });
+
+/**
+ * The name PaperSign greets the SMTP server with. Without one, nodemailer uses
+ * the machine's host name if it has a dot, otherwise "[127.0.0.1]", which
+ * Google's SMTP relay mostly refuses with "421 4.7.0 Try again later".
+ */
+export function ehloName(): string | undefined {
+  if (config.SMTP_EHLO_NAME) return config.SMTP_EHLO_NAME;
+  const host = new URL(config.APP_URL).hostname;
+  const ip = /^[\d.]+$/.test(host) || host.includes(":");
+  return host.includes(".") && !ip ? host : undefined;
+}
 
 async function deliverSmtp(message: SecurityMail) {
   const local = ["localhost", "127.0.0.1", "::1"].includes(config.SMTP_HOST!);
   const transport = nodemailer.createTransport({
     host: config.SMTP_HOST,
     port: config.SMTP_PORT,
+    name: ehloName(),
     secure: config.SMTP_SECURE === "true",
     // Only an explicit SMTP_REQUIRE_TLS=false allows plain remote SMTP.
     requireTLS:
@@ -146,7 +166,7 @@ const domainOf = (address: string) =>
 /** Only callers choose recipients. SMTP details and message bodies never enter logs. */
 export async function sendSecurityMail(message: SecurityMail): Promise<void> {
   if (!mailConfigured())
-    throw new Error(
+    throw unavailable(
       "Email delivery is not configured. Contact the administrator.",
     );
   try {
@@ -161,7 +181,7 @@ export async function sendSecurityMail(message: SecurityMail): Promise<void> {
       `${message.label ?? "Email"} could not be sent`,
       { ...failure, recipientDomain: domainOf(message.to) },
     );
-    throw new Error("Email delivery failed. Please try again later.");
+    throw unavailable("Email delivery failed. Please try again later.");
   }
 }
 
