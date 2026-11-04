@@ -23,7 +23,8 @@ or with `--profile` on the command line.
 - Docker Engine with Compose v2 (`docker compose`).
 - 2 CPU cores and 2 GB of memory.
 - x86-64. Images for other architectures are not published yet.
-- For real use: a domain name pointing at the server, and an SMTP account.
+- For real use: a domain name pointing at the server, and an SMTP account or
+  relay (or a Postmark server API token instead of SMTP).
   Email is required: account verification, password recovery and every
   signer's one-time code are sent by email, and those steps fail without it.
 
@@ -124,7 +125,8 @@ Run these in the `docker` folder.
 | Logs | `docker compose logs -f web worker` |
 | Stop / start | `docker compose stop` / `docker compose up -d` |
 | First Admin | `docker compose exec web papersign bootstrap-admin --email EMAIL` |
-| Health checks with alerts | `docker compose run --rm web monitor` (schedule it with cron; set `ALERT_WEBHOOK_URL`) |
+| Health checks with alerts | `docker compose run --rm web monitor` (schedule it with cron; set `ALERT_WEBHOOK_URL` and/or `ERROR_ALERT_EMAIL`) |
+| Test the error-alert email | `docker compose exec web papersign test-alert` (needs `ERROR_ALERT_EMAIL`) |
 | List container commands | `docker compose run --rm web help` |
 
 ## Data and backups

@@ -562,6 +562,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         if (sha256(JSON.stringify(preview)) !== body.previewHash)
           fail(409, "The invitation changed. Review the email again.");
         await sendSecurityMail({
+          label: "Account invitation email",
           to: preview.to,
           subject: preview.subject,
           text: preview.body,

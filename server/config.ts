@@ -23,6 +23,15 @@ const env = z
     // Plain SMTP is accepted only for a trusted relay on the same private
     // network (for example a mail container in the same compose project).
     SMTP_REQUIRE_TLS: z.enum(["true", "false"]).default("true"),
+    // Postmark's HTTP API instead of SMTP. It answers each send at once, so a
+    // refused email (sending limit, inactive recipient) shows as failed.
+    POSTMARK_SERVER_TOKEN: z.string().min(1).optional(),
+    POSTMARK_MESSAGE_STREAM: z.string().min(1).default("outbound"),
+    // Sender for all email, whichever way it is sent. SMTP_FROM still works.
+    MAIL_FROM: z.string().min(1).optional(),
+    // Optional: email every server error to this address (throttled; no
+    // signing links, tokens or document content).
+    ERROR_ALERT_EMAIL: z.string().email().optional(),
     REGISTRATION_ENABLED: z.string().default("true"),
     // Who runs this installation, shown on the privacy page.
     OPERATOR_NAME: z.string().trim().min(1).max(200).optional(),
@@ -49,6 +58,21 @@ const env = z
       message: "SEAL_SOCKET and SEAL_POLICY_ID must be configured together.",
     },
   )
+  .refine((value) => !(value.SMTP_HOST && value.POSTMARK_SERVER_TOKEN), {
+    message: "Set either SMTP_HOST or POSTMARK_SERVER_TOKEN, not both.",
+  })
+  .refine(
+    (value) =>
+      !value.ERROR_ALERT_EMAIL ||
+      Boolean(
+        (value.SMTP_HOST || value.POSTMARK_SERVER_TOKEN) &&
+        (value.MAIL_FROM || value.SMTP_FROM),
+      ),
+    {
+      message:
+        "ERROR_ALERT_EMAIL needs email delivery: SMTP_HOST or POSTMARK_SERVER_TOKEN, and MAIL_FROM.",
+    },
+  )
   // An empty value means "not set", as Docker Compose passes unset optional
   // variables as empty strings.
   .parse(
@@ -60,5 +84,9 @@ export const config = {
   ...env,
   DATA_DIR: resolve(env.DATA_DIR),
   APP_URL: new URL(env.APP_URL).origin,
+  /** The sender for all email: MAIL_FROM, or SMTP_FROM from older setups. */
+  MAIL_FROM: env.MAIL_FROM ?? env.SMTP_FROM,
 };
-export const emailEnabled = Boolean(config.SMTP_HOST && config.SMTP_FROM);
+export const emailEnabled = Boolean(
+  (config.SMTP_HOST || config.POSTMARK_SERVER_TOKEN) && config.MAIL_FROM,
+);

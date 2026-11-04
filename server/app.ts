@@ -10,6 +10,7 @@ import { existsSync } from "node:fs";
 import { eq, and, isNull, desc, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { sendSecurityMail } from "./mail.js";
+import { reportError } from "./alerts.js";
 import { emailHtml } from "./email-design.js";
 import { auth } from "./auth.js";
 import { config, emailEnabled } from "./config.js";
@@ -453,9 +454,10 @@ async function emailNewTurns(
   for (const invitation of due) {
     let event = "turn_email_sent";
     try {
-      await sendSecurityMail(
-        turnMail(invitation, doc, owner?.name ?? "The sender"),
-      );
+      await sendSecurityMail({
+        ...turnMail(invitation, doc, owner?.name ?? "The sender"),
+        label: "Turn-to-sign email",
+      });
     } catch {
       event = "turn_email_failed";
       log.warn(
@@ -502,6 +504,7 @@ async function emailFirstSigners(
         subject: mail.subject,
         text: mail.body,
         html: mail.html,
+        label: "Invitation email",
       });
       outcome.set(invitation.id, "sent");
     } catch {
@@ -525,12 +528,17 @@ async function emailFirstSigners(
           sentWith: "invitations_created",
         },
       })
-      .catch(() =>
+      .catch((error) => {
         log.error(
           { documentId: doc.id, invitationId: invitation.id, event },
           "Could not record the invitation email",
-        ),
-      );
+        );
+        void reportError(
+          "history_write_failed",
+          "Could not record an invitation email in the document history",
+          { documentId: doc.id, event, error: error.message },
+        );
+      });
   }
   return outcome;
 }
@@ -540,9 +548,14 @@ function emailNewTurnsLater(
   actorId: string,
   log: FastifyBaseLogger,
 ) {
-  void emailNewTurns(documentId, due, actorId, log).catch(() =>
-    log.warn({ documentId }, "Could not check for the next signer's turn"),
-  );
+  void emailNewTurns(documentId, due, actorId, log).catch((error) => {
+    log.warn({ documentId }, "Could not check for the next signer's turn");
+    void reportError(
+      "turn_email_check_failed",
+      "Could not check for the next signer's turn",
+      { documentId, error: error.message },
+    );
+  });
 }
 
 export async function buildApp() {
@@ -630,6 +643,14 @@ export async function buildApp() {
     if (err.statusCode && (err.statusCode < 500 || err.publicError))
       return reply.status(err.statusCode).send({ message: err.message });
     req.log.error({ error: err.message }, "Request failed");
+    // The route pattern, never the URL: URLs can hold signing-link tokens.
+    const route = req.routeOptions?.url ?? "unknown route";
+    void reportError("request_failed", `${req.method} ${route} failed`, {
+      method: req.method,
+      route,
+      error: err.message,
+      code: err.code,
+    });
     return reply
       .status(500)
       .send({ message: "Something went wrong. Try again in a moment." });
@@ -1059,12 +1080,17 @@ export async function buildApp() {
             { exportId: record.id },
             { singletonKey: record.id },
           )
-          .catch((error) =>
+          .catch((error) => {
             req.log.error(
               { message: error.message },
               "Export stored; worker will enqueue it",
-            ),
-          );
+            );
+            void reportError(
+              "queue_failed",
+              "A PDF export could not be queued; the worker retries it",
+              { error: error.message },
+            );
+          });
       return reply.status(202).send({
         id: record.id,
         state: record.state,
@@ -1412,6 +1438,7 @@ export async function buildApp() {
         subject: preview.subject,
         text: preview.body,
         html: preview.html,
+        label: "Invitation email",
       });
       await db.insert(audit).values({
         id: randomUUID(),

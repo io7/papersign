@@ -7,7 +7,7 @@
 name: papersign
 
 x-app: &app
-  image: ${PAPERSIGN_IMAGE:-ghcr.io/io7/papersign:0.7.6}
+  image: ${PAPERSIGN_IMAGE:-ghcr.io/io7/papersign:0.7.7}
   build:
     context: ..
     dockerfile: Dockerfile
@@ -33,6 +33,10 @@ x-app: &app
     SMTP_USER: ${SMTP_USER:-}
     SMTP_PASSWORD: ${SMTP_PASSWORD:-}
     SMTP_FROM: ${SMTP_FROM:-}
+    MAIL_FROM: ${MAIL_FROM:-}
+    POSTMARK_SERVER_TOKEN: ${POSTMARK_SERVER_TOKEN:-}
+    POSTMARK_MESSAGE_STREAM: ${POSTMARK_MESSAGE_STREAM:-outbound}
+    ERROR_ALERT_EMAIL: ${ERROR_ALERT_EMAIL:-}
     ACCOUNT_STORAGE_LIMIT_BYTES: ${ACCOUNT_STORAGE_LIMIT_BYTES:-524288000}
     MAX_ACTIVE_EXPORTS: ${MAX_ACTIVE_EXPORTS:-3}
     DELETION_GRACE_DAYS: ${DELETION_GRACE_DAYS:-30}

@@ -147,6 +147,7 @@ function jumpToPage(index: number) {
   pageIndex.value = index;
   pdfStage.value?.scrollToPage(index);
 }
+let recordAccountTried = false;
 async function load(resetIdentity = true) {
   details.value = await api(`/sign/${token}`);
   textValues.value = Object.fromEntries(
@@ -159,6 +160,27 @@ async function load(resetIdentity = true) {
   if (resetIdentity) {
     name.value = details.value!.name;
     pageIndex.value = details.value!.field.pageIndex;
+  }
+  // Signed in as this signer with the authenticator: that session opens the
+  // signing record without an email code. Tried once per page; on failure the
+  // email code below remains.
+  const record = details.value?.recordVerification;
+  if (
+    details.value?.state === "signed" &&
+    record?.accountSession &&
+    !record.verified &&
+    !recordAccountTried
+  ) {
+    recordAccountTried = true;
+    try {
+      await api(`/sign/${token}/record/verification/account`, {
+        method: "POST",
+        body: json({ revision: details.value.revision }),
+      });
+      details.value = await api(`/sign/${token}`);
+    } catch {
+      /* the email code stays available */
+    }
   }
   if (
     details.value?.state === "signed" &&

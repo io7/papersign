@@ -103,7 +103,7 @@ const documentId = z.string().uuid().describe("PaperSign document id.");
 const text = (value) => ({ content: [{ type: "text", text: value }] });
 
 export function createPaperSignServer({ baseUrl, key } = {}) {
-  const server = new McpServer({ name: "papersign", version: "0.7.6" });
+  const server = new McpServer({ name: "papersign", version: "0.7.7" });
   const plans = new Map();
   let api;
   async function client() {

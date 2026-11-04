@@ -18,6 +18,8 @@ import {
   requestEvidenceTimestamp,
   processPendingEvidenceTimestamp,
 } from "./evidence-timestamp.js";
+import { reportError, setAlertSource } from "./alerts.js";
+setAlertSource("worker");
 await startQueue();
 await queue.work<{ exportId: string }>(
   "pdf-export",
@@ -153,6 +155,11 @@ await queue.work<{ exportId: string }>(
               eq(exportsTable.state, "working"),
             ),
           );
+        void reportError("export_failed", "A PDF export failed", {
+          documentId: record.documentId,
+          canonical: record.canonical,
+          error: error instanceof Error ? error.message : String(error),
+        });
         throw error;
       }
     }
@@ -187,14 +194,25 @@ async function reconcile() {
   // Requests committed with ready PDFs survive a crash before/during timestamping.
   // The advisory lock serializes bounded attempts across worker processes.
   const timestamp = await processPendingEvidenceTimestamp();
-  if (timestamp.state === "failed")
+  if (timestamp.state === "failed") {
     console.error(
       "PaperSign evidence timestamp failed; the completed PDF is preserved.",
     );
+    void reportError(
+      "evidence_timestamp_failed",
+      "An evidence timestamp failed; the completed PDF is preserved",
+    );
+  }
 }
 await reconcile();
 const timer = setInterval(
-  () => reconcile().catch((err) => console.error(err.message)),
+  () =>
+    reconcile().catch((err) => {
+      console.error(err.message);
+      void reportError("worker_failed", "The PDF worker's background check failed", {
+        error: err.message,
+      });
+    }),
   10000,
 );
 console.log("PaperSign PDF worker ready.");

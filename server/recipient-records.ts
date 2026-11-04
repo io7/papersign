@@ -13,6 +13,7 @@ import { buildEvidenceArchive } from "./evidence-archive.js";
 import {
   sendVerificationCode,
   confirmVerificationCode,
+  confirmAccountSession,
   requireVerifiedMailbox,
   type VerificationContext,
 } from "./signer-verification.js";
@@ -81,6 +82,24 @@ export function registerRecipientRecordRoutes(app: FastifyInstance) {
           "The signing record changed. Reload it before verifying your email.",
         );
       return confirmVerificationCode(req, context, code);
+    },
+  );
+  // A session signed in as the invited address and confirmed with the
+  // authenticator stands in for the email code, as it does for signing.
+  app.post(
+    "/api/sign/:token/record/verification/account",
+    { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    async (req, reply) => {
+      const { revision } = z
+        .object({ revision: z.number().int().positive() })
+        .parse(req.body);
+      const { context } = await recordParticipant(req);
+      if (revision !== context.revision)
+        fail(
+          409,
+          "The signing record changed. Reload it before verifying your email.",
+        );
+      return confirmAccountSession(req, reply, context);
     },
   );
   app.get("/api/sign/:token/record", async (req) => {

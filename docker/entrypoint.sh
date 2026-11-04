@@ -13,6 +13,8 @@ case "$command" in
     exec node dist-server/server/migrate.js "$@" ;;
   monitor)
     exec node dist-server/server/monitor.js "$@" ;;
+  test-alert)
+    exec node dist-server/server/send-test-alert.js "$@" ;;
   bootstrap-admin)
     exec node dist-server/scripts/bootstrap-admin.js "$@" ;;
   healthcheck)
@@ -20,7 +22,7 @@ case "$command" in
   verify-evidence)
     exec node dist-server/scripts/verify-evidence.js "$@" ;;
   help|--help|-h)
-    echo "Commands: web (default), worker, migrate, monitor, bootstrap-admin --email EMAIL, healthcheck, verify-evidence FILE" ;;
+    echo "Commands: web (default), worker, migrate, monitor, test-alert, bootstrap-admin --email EMAIL, healthcheck, verify-evidence FILE" ;;
   *)
     exec "$command" "$@" ;;
 esac

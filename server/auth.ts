@@ -8,6 +8,7 @@ import * as schema from "./schema.js";
 import { twoFactor } from "./account-security-schema.js";
 import { config } from "./config.js";
 import { mailConfigured, sendSecurityMail } from "./mail.js";
+import { reportError } from "./alerts.js";
 import { emailHtml, type EmailDesign } from "./email-design.js";
 
 const verifiedFactorPaths = new Set([
@@ -135,17 +136,28 @@ async function accountMail(
       subject,
       text,
       html: emailHtml(text, design),
+      label: "Account email",
     });
   } catch {
     console.error("PaperSign account email delivery failed.");
   }
+}
+// Better Auth's own messages can hold token values, so alerts name only the
+// error type.
+function authFailed(error?: unknown) {
+  console.error("PaperSign authentication request failed.");
+  void reportError(
+    "auth_failed",
+    "A sign-in or account request failed on the server",
+    { errorType: error instanceof Error ? error.name : undefined },
+  );
 }
 export const auth = betterAuth({
   appName: "PaperSign",
   // Better Auth may otherwise log a database exception containing token values.
   logger: {
     level: "error",
-    log: () => console.error("PaperSign authentication request failed."),
+    log: () => authFailed(),
   },
   database: drizzleAdapter(db, {
     provider: "pg",
@@ -158,7 +170,7 @@ export const auth = betterAuth({
         !(error instanceof APIError) ||
         error.status === "INTERNAL_SERVER_ERROR"
       )
-        console.error("PaperSign authentication request failed.");
+        authFailed(error);
     },
   },
   secret: config.BETTER_AUTH_SECRET,

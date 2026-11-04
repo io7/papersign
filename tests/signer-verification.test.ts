@@ -714,4 +714,83 @@ describe("Account holders prove the invited address with their authenticator", (
       ).statusCode,
     ).toBe(403);
   });
+  it("opens the signing record with that session too, without an email code", async () => {
+    const f = await fixture(),
+      account = await signerAccount(f.email);
+    expect(
+      (
+        await account.browser.request(`/sign/${f.token}/verification/account`, {
+          revision: f.revision,
+        })
+      ).statusCode,
+    ).toBe(200);
+    const reviewId = await reviewed(account.browser, f);
+    expect(
+      (
+        await account.browser.request(
+          `/sign/${f.token}`,
+          acceptance(f, reviewId),
+        )
+      ).statusCode,
+    ).toBe(200);
+    const after = (await account.browser.request(`/sign/${f.token}`)).json();
+    expect(after.recordVerification).toMatchObject({
+      verified: false,
+      accountSession: true,
+      authenticatorAvailable: false,
+    });
+    // Signing used up its proof; the record needs one of its own.
+    expect(
+      (await account.browser.request(`/sign/${f.token}/record`)).statusCode,
+    ).toBe(403);
+    expect(
+      (
+        await new Browser().request(
+          `/sign/${f.token}/record/verification/account`,
+          { revision: after.revision },
+        )
+      ).statusCode,
+    ).toBe(403);
+    const opened = await account.browser.request(
+      `/sign/${f.token}/record/verification/account`,
+      { revision: after.revision },
+    );
+    expect(opened.statusCode, opened.body).toBe(200);
+    expect(
+      (await account.browser.request(`/sign/${f.token}`)).json()
+        .recordVerification.verified,
+    ).toBe(true);
+    expect(
+      (await account.browser.request(`/sign/${f.token}/record`)).statusCode,
+    ).toBe(200);
+    expect(
+      mailbox.messages.some(
+        (mail) =>
+          mail.to === f.email && mail.subject.includes("verification code"),
+      ),
+    ).toBe(false);
+  });
+  it("keeps the email check for the record when the session is password-only", async () => {
+    const f = await fixture(),
+      passwordOnly = await signerAccount(f.email, false);
+    const browser = passwordOnly.browser;
+    await verify(browser, f);
+    const reviewId = await reviewed(browser, f);
+    expect(
+      (await browser.request(`/sign/${f.token}`, acceptance(f, reviewId)))
+        .statusCode,
+    ).toBe(200);
+    const after = (await browser.request(`/sign/${f.token}`)).json();
+    expect(after.recordVerification).toMatchObject({
+      verified: false,
+      accountSession: false,
+    });
+    expect(
+      (
+        await browser.request(`/sign/${f.token}/record/verification/account`, {
+          revision: after.revision,
+        })
+      ).statusCode,
+    ).toBe(403);
+  });
 });

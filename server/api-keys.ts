@@ -6,6 +6,7 @@ import { db } from "./db.js";
 import { adminEvents, apiKeys, user } from "./schema.js";
 import { sha256 } from "./storage.js";
 import { adminMutation, audit, requireAdmin } from "./admin.js";
+import { reportError } from "./alerts.js";
 import type { AdminApiKey } from "../shared/admin-types.js";
 
 export interface ApiKeyActor {
@@ -118,8 +119,13 @@ export async function recordApiKeyRequest(
         documentId: params?.id ?? null,
       },
     });
-  } catch {
+  } catch (error) {
     req.log.error("API key request could not be recorded.");
+    void reportError(
+      "history_write_failed",
+      "An API key request could not be recorded in the admin log",
+      { route: req.routeOptions.url, error: (error as Error).message },
+    );
   }
 }
 

@@ -19,6 +19,8 @@ async function mockRequest(
     accepted?: Record<string, unknown>;
     authenticatorAvailable?: boolean;
     accountSession?: boolean;
+    recordAccountSession?: boolean;
+    recordAccountRefused?: boolean;
     proofs?: Array<{ path: string; body: Record<string, unknown> }>;
   },
 ) {
@@ -34,6 +36,22 @@ async function mockRequest(
       });
     if (path.endsWith("/verification/confirm")) {
       state.verified = true;
+      return route.fulfill({ json: { verified: true } });
+    }
+    if (path.endsWith("/record/verification/account")) {
+      state.proofs?.push({
+        path: "record/account",
+        body: request.postDataJSON(),
+      });
+      if (state.recordAccountRefused)
+        return route.fulfill({
+          status: 403,
+          json: {
+            message:
+              "Sign in with the invited email address and your authenticator first.",
+          },
+        });
+      state.recordVerified = true;
       return route.fulfill({ json: { verified: true } });
     }
     if (
@@ -108,6 +126,8 @@ async function mockRequest(
               verified: state.recordVerified ?? false,
               emailHint: "s•••@example.test",
               deliveryAvailable: true,
+              authenticatorAvailable: false,
+              accountSession: state.recordAccountSession ?? false,
             }
           : undefined,
         consent: SIGNING_CONSENT,
@@ -427,4 +447,59 @@ test("a signed-in account confirmed with its authenticator continues in one step
     .click();
   await expect(page.locator(".pdf-overlay")).toBeVisible();
   expect(state.proofs).toEqual([{ path: "account", body: { revision: 2 } }]);
+});
+
+test("a signed-in account confirmed with its authenticator opens its signing record without a code", async ({
+  page,
+}) => {
+  const state = {
+    verified: false,
+    failedPdf: false,
+    signed: true,
+    deliveryAvailable: true,
+    recordAccountSession: true,
+    record: {
+      state: "ready",
+      evidenceComplete: false,
+      outcome: "all-signed",
+      participants: [{ name: "Synthetic invited signer", order: 1, state: "signed" }],
+    },
+    proofs: [] as Array<{ path: string; body: Record<string, unknown> }>,
+  };
+  await mockRequest(page, state);
+  await page.goto(`/sign/${token}`);
+  await expect(
+    page.getByRole("heading", { name: "Your signing record" }),
+  ).toBeVisible();
+  await expect.poll(() => state.proofs).toEqual([
+    { path: "record/account", body: { revision: 3 } },
+  ]);
+  await expect(
+    page.getByRole("button", { name: "Send verification code", exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByText("again to access the completed PDF")).toHaveCount(0);
+  await capture(page, "record-account-session");
+});
+
+test("the signing record falls back to the email code when the session is refused", async ({
+  page,
+}) => {
+  const state = {
+    verified: false,
+    failedPdf: false,
+    signed: true,
+    deliveryAvailable: true,
+    recordAccountSession: true,
+    recordAccountRefused: true,
+    proofs: [] as Array<{ path: string; body: Record<string, unknown> }>,
+  };
+  await mockRequest(page, state);
+  await page.goto(`/sign/${token}`);
+  await expect(
+    page.getByRole("button", { name: "Send verification code", exact: true }),
+  ).toBeVisible();
+  // Tried once, not in a loop.
+  expect(state.proofs).toEqual([
+    { path: "record/account", body: { revision: 3 } },
+  ]);
 });

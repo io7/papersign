@@ -95,7 +95,8 @@ restore and upgrades.
   Each signer reviews the PDF with the earlier signatures included.
 - Retained review PDFs, immutable final PDFs, acceptance receipts and a portable
   evidence package with an offline Node verifier. Recipients can retrieve their
-  completed record after signing-link expiry using a fresh email challenge.
+  completed record after signing-link expiry using a fresh email challenge, or
+  in one step when signed in with an authenticator-confirmed session.
 - Optional standalone RFC 3161 timestamps of the evidence manifest, without an
   organization certificate. Provider configuration is separate from PDF sealing.
 - Copyable signing links. Invitation emails have a complete preview and a
@@ -324,6 +325,14 @@ Services: `papersign-web`, `papersign-worker`, `papersign-backup.timer` and
 failures, storage and backup freshness. Set `ALERT_WEBHOOK_URL` and verify alert
 delivery before relying on notifications; without it, monitoring writes to the
 journal only.
+
+Optional error emails: set `ERROR_ALERT_EMAIL` and PaperSign emails that
+address about server errors (failed requests and emails, PDF exports, evidence
+timestamps, the job queue) and failing or recovered health checks. The first
+error of a kind is sent at once and later ones are summed up at most every 15
+minutes. Alerts never contain signing links, tokens or document content, and
+every error is also written to the service log as one JSON line. Check delivery
+with `node dist-server/server/send-test-alert.js`.
 Configuration: `/etc/papersign/papersign.env` (root:papersign, 0640).
 Private files: `/var/lib/papersign/data`.
 Hourly database dump: `/var/lib/postgresql/papersign.dump`.
@@ -342,8 +351,11 @@ page names it as the service operator. Set `REGISTRATION_ENABLED=false` to close
 public registration; valid account invitations can still be accepted.
 
 Verification, password recovery and recipient signing need working mail
-delivery and fail closed without it. Confirm the provider, sender/domain
-configuration and actual delivery before production use. Manually initiated
+delivery and fail closed without it. PaperSign sends through any SMTP server or
+relay (`SMTP_HOST`), or through Postmark's HTTP API (`POSTMARK_SERVER_TOKEN`),
+which reports a refused message at once instead of dropping it later. Confirm
+the provider, sender/domain configuration and actual delivery before production
+use. Manually initiated
 invitation emails show recipients, subject and body before sending;
 user-requested verification and recovery messages are sent by their respective
 actions, and the "your turn" notice goes to the next signer when an earlier

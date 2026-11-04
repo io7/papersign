@@ -230,15 +230,15 @@ export async function verificationStatus(
   context: VerificationContext,
 ) {
   const row = await browserChallenge(req, context);
-  // Account proofs are offered for signing only. The signing record keeps
-  // its email check.
+  // Signing accepts an authenticator code or a session confirmed with the
+  // authenticator. The signing record accepts that session too, so a
+  // signed-in account holder opens it without an email code; everyone else
+  // keeps the email check.
   const signing = context.purpose === "sign";
-  const [account, session] = signing
-    ? await Promise.all([
-        authenticatorAccount(context.email),
-        confirmedSession(req, context),
-      ])
-    : [undefined, undefined];
+  const [account, session] = await Promise.all([
+    signing ? authenticatorAccount(context.email) : undefined,
+    confirmedSession(req, context),
+  ]);
   return {
     required: true as const,
     verified: Boolean(
@@ -324,6 +324,7 @@ export async function sendVerificationCode(
   try {
     const text = `Your PaperSign verification code is: ${code}\n\nIt expires in 10 minutes and only works in the browser that requested it. ${context.purpose === "sign" ? "Use it to verify your email before reviewing and signing the document." : "Use it to access your completed signing record."}\n\nDo not share this code, including with the document sender. If you did not request it, ignore this email.\n\nPaperSign`;
     await sendSecurityMail({
+      label: "Verification code email",
       to: context.email,
       subject: "Your PaperSign verification code",
       text,
