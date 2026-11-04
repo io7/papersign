@@ -43,7 +43,7 @@ is present.
 | GET | `/api/documents/:id` | Document, pages and signers with links and status |
 | GET | `/api/documents/:id/pdf` | Original PDF |
 | PUT | `/api/documents/:id/placements` | Owner text fields (text only) |
-| POST | `/api/documents/:id/invitations` | Signers, order, fields; creates links |
+| POST | `/api/documents/:id/invitations` | Signers, order, fields; creates links; `sendEmail: true` also emails the first signer |
 | GET | `/api/documents/:id/invitations/:invitationId/email` | Email preview and its hash |
 | POST | `/api/documents/:id/invitations/:invitationId/email` | Send that previewed email |
 | POST | `/api/documents/:id/invitations/:invitationId/reissue` | New link for an unfinished signer |
@@ -82,15 +82,22 @@ from the file named in `PAPERSIGN_KEY_FILE` (default
 
 ```
 node client/papersign.mjs plan    spec.json [--out DIR]   # find anchors, write previews
-node client/papersign.mjs create  spec.json [--out DIR]   # upload, add fields, create links
+node client/papersign.mjs create  spec.json [--out DIR] [--send]   # upload, add fields, create links
 node client/papersign.mjs status  DOCUMENT_ID
 node client/papersign.mjs email   DOCUMENT_ID [--signer EMAIL]
 node client/papersign.mjs download DOCUMENT_ID OUTPUT.pdf
 ```
 
-`plan` never contacts PaperSign. `create` never sends email. `email` sends the
-invitation emails that PaperSign previews, one per pending signer. After that,
-PaperSign itself emails each later signer when their turn opens.
+`plan` never contacts PaperSign. `create` sends no email unless you pass
+`--send`, which emails the first signer their invitation as soon as the links
+exist. `email` sends the invitation emails that PaperSign previews, one per
+pending signer. Either way, PaperSign itself emails each later signer when their
+turn opens.
+
+With `sendEmail: true` the invitations request fails with 503 before anything
+changes if the server has no SMTP. The owner is never emailed about their own
+turn. Each created link reports `invitationEmail`: `sent`, `failed` (the links
+stay; send the email again) or `null` (not emailed now).
 
 A spec names the PDF, the signers in order and, for each field, a piece of text
 in the PDF to place it against:
@@ -142,7 +149,7 @@ codex mcp add papersign -- node <repo>/client/mcp.mjs
 | Tool | Effect |
 |---|---|
 | `papersign_plan` | Finds anchors in a local PDF and returns the placement report plus a preview image of each page with fields. Contacts nothing. |
-| `papersign_create` | Creates the request from a `plan_id`: upload, owner text, signing links. Sends no email. |
+| `papersign_create` | Creates the request from a `plan_id`: upload, owner text, signing links. Sends no email unless `send_email` is true; then it emails the first signer. |
 | `papersign_status` | Document status and each signer's progress; links only on request. |
 | `papersign_list_documents` | The key owner's documents. |
 | `papersign_preview_emails` | The invitation emails PaperSign would send. |
@@ -154,8 +161,9 @@ codex mcp add papersign -- node <repo>/client/mcp.mjs
 A request can only be created from a plan made earlier in the same MCP
 session, and each plan is used once. What PaperSign receives is therefore
 exactly what the preview showed, and a retried call cannot create a duplicate.
-`papersign_send_emails` is marked as reaching the outside world, so the client
-asks before each call.
+`papersign_create` and `papersign_send_emails` are marked as reaching the
+outside world, so the client asks before each call; `send_email` tells the model
+to set it only when the user has approved sending.
 
 ## Verification
 

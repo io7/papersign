@@ -11,6 +11,13 @@ export interface EditorSave {
   revision: number;
   placements: Placement[];
 }
+export interface InviteInput {
+  revision: number;
+  sendEmail?: boolean;
+  recipients: Array<
+    Pick<Invitation, "name" | "email" | "field" | "textFields">
+  >;
+}
 
 /** A closed local fixture: only revision-checked placement writes are accepted. */
 export async function editorFixture(
@@ -21,6 +28,9 @@ export async function editorFixture(
     placements?: Placement[];
     status?: DocumentInfo["status"];
     invitations?: Invitation[];
+    emailEnabled?: boolean;
+    /** Accept link creation; the first signer's email gets this outcome. */
+    invitationEmail?: "sent" | "failed";
   } = {},
 ) {
   const bytes = options.pdf ?? (await samplePdf(false));
@@ -57,6 +67,7 @@ export async function editorFixture(
     invitations: options.invitations ?? [],
   };
   const saves: EditorSave[] = [];
+  const invites: InviteInput[] = [];
   const unexpectedWrites: string[] = [];
   let nextFailure = "";
   let loseResponse = false;
@@ -110,6 +121,42 @@ export async function editorFixture(
         activeSaves--;
       }
     }
+    if (
+      options.invitationEmail &&
+      request.method() === "POST" &&
+      path === `/api/documents/${editorDocumentId}/invitations`
+    ) {
+      const input = request.postDataJSON() as InviteInput;
+      invites.push(structuredClone(input));
+      const created: Invitation[] = input.recipients.map((r, index) => ({
+        id: `cccccccc-cccc-4ccc-8ccc-${String(index + 1).padStart(12, "0")}`,
+        name: r.name,
+        email: r.email,
+        field: r.field,
+        textFields: r.textFields ?? [],
+        state: "pending",
+        signingOrder: index + 1,
+        signingStatus: index ? "waiting" : "ready",
+        canSign: index === 0,
+        expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+        signedAt: null,
+        url: `http://127.0.0.1:5176/sign/fixture-created-${index + 1}`,
+      }));
+      document = {
+        ...document,
+        status: "awaiting",
+        revision: document.revision + 1,
+        invitations: created,
+      };
+      return route.fulfill({
+        status: 201,
+        json: created.map((invitation, index) => ({
+          ...invitation,
+          invitationEmail:
+            input.sendEmail && index === 0 ? options.invitationEmail : null,
+        })),
+      });
+    }
     if (request.method() !== "GET") {
       unexpectedWrites.push(`${request.method()} ${path}`);
       return route.fulfill({
@@ -128,7 +175,10 @@ export async function editorFixture(
         },
       };
     else if (path === "/api/config")
-      json = { registrationEnabled: true, emailEnabled: false };
+      json = {
+        registrationEnabled: true,
+        emailEnabled: options.emailEnabled ?? false,
+      };
     else if (path === "/api/signatures")
       json = [
         {
@@ -156,6 +206,7 @@ export async function editorFixture(
 
   return {
     saves,
+    invites,
     unexpectedWrites,
     get document() {
       return structuredClone(document);

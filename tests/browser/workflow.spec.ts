@@ -406,8 +406,11 @@ test("build and reorder a signer list, share links, and sign one after another",
   await page
     .getByLabel("Recipient name", { exact: true })
     .fill("Unfinished signer");
+  // With SMTP on, the button reads "Create links and send" until email is cleared.
   await expect(
-    page.getByRole("button", { name: "Create signing links", exact: true }),
+    page.getByRole("button", {
+      name: /^Create (signing links|links and send)$/,
+    }),
   ).toBeDisabled();
   await page.getByLabel("Recipient name", { exact: true }).clear();
   await ownerViewport(page, 1440, 1000);

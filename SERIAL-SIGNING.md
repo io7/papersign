@@ -6,12 +6,20 @@ links fixes the order and the PDF.
 
 The owner can copy every link immediately and see each person's status. Later
 recipients see a waiting screen until earlier requests are signed or revoked.
-The next recipient reviews a PDF containing the earlier signatures. Invitation
-emails keep their preview and explicit send step. When SMTP is configured,
-PaperSign emails a recipient automatically once their turn opens, after an
-earlier request is signed or revoked. The document history records whether that
-email was sent (`turn_email_sent`) or failed (`turn_email_failed`); a failure
-never undoes the signature or revocation that caused it.
+The next recipient reviews a PDF containing the earlier signatures.
+
+When SMTP is configured, the owner can have PaperSign email the first signer
+while creating the links ("Email … the signing link now", on by default; the API
+field is `sendEmail`). The email is sent after the links are committed and
+recorded as `invitation_email_accepted` or `invitation_email_failed`; a failure
+leaves the links in place and the owner can send it again with Email. The owner
+is never emailed about their own turn. Otherwise invitation emails keep their
+preview and explicit send step.
+
+PaperSign then emails each recipient automatically once their turn opens, after
+an earlier request is signed or revoked. The document history records whether
+that email was sent (`turn_email_sent`) or failed (`turn_email_failed`); a
+failure never undoes the signature or revocation that caused it.
 
 ## Signatures and downloads
 

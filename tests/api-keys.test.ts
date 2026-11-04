@@ -15,7 +15,11 @@ import { SIGNING_CONSENT } from "../shared/signing-consent";
 import { samplePdf, signaturePng } from "./fixtures";
 import { verifyFixtureEmail, fixtureTotp } from "./helpers/account-security.js";
 import { verifyApiRecipient } from "./helpers/signer-verification.js";
-import { assertTestMail, waitForTestMail } from "./helpers/test-mail.js";
+import {
+  assertTestMail,
+  latestTestMail,
+  waitForTestMail,
+} from "./helpers/test-mail.js";
 // @ts-expect-error The command-line client is plain JavaScript.
 import { closePdf, findAll, loadLayout, openPdf } from "../client/anchors.mjs";
 // @ts-expect-error The MCP server is plain JavaScript.
@@ -439,6 +443,107 @@ describe("Admin API keys", () => {
     expect(logged.some((entry) => entry.startsWith("GET"))).toBe(false);
   });
 
+  // Uses the browser session, as the editor does; key creation is rate limited.
+  it("emails only the first signer when asked to while creating the links", async () => {
+    const browserUpload = async (name: string) => {
+      const form = new FormData();
+      form.append(
+        "file",
+        new Blob([new Uint8Array(await samplePdf(false))], {
+          type: "application/pdf",
+        }),
+        name,
+      );
+      const response = await request("/documents", admin.cookie, "POST", form);
+      expect(response.status, await response.clone().text()).toBe(201);
+      return (await response.json()) as { id: string; revision: number };
+    };
+    const signers = ["first", "second"].map((label, index) => ({
+      name: `QA send ${label}`,
+      email: `${prefix}send-${label}@example.invalid`,
+      field: field(0, 0.5 + index * 0.15),
+    }));
+    const document = await browserUpload("Send on create QA.pdf");
+    const before = Date.now();
+    const created = await request(
+      `/documents/${document.id}/invitations`,
+      admin.cookie,
+      "POST",
+      {
+        revision: document.revision,
+        termsLocked: true,
+        sendEmail: true,
+        recipients: signers,
+      },
+    );
+    if (!emailEnabled) {
+      // Without SMTP nothing changes, so the owner can still create plain links.
+      expect(created.status).toBe(503);
+      const unchanged = await (
+        await request(`/documents/${document.id}`, admin.cookie)
+      ).json();
+      expect(unchanged.status).toBe("draft");
+      expect(unchanged.invitations ?? []).toHaveLength(0);
+      return;
+    }
+    expect(created.status, await created.clone().text()).toBe(201);
+    const links = await created.json();
+    expect(
+      links.map(
+        (link: { invitationEmail: string | null }) => link.invitationEmail,
+      ),
+    ).toEqual(["sent", null]);
+    const mail = await waitForTestMail(
+      signers[0].email,
+      "invited you to sign",
+      before,
+    );
+    expect(mail.text).toContain(links[0].url);
+    expect(mail.text).toContain("You can sign it now.");
+    // The second signer hears from PaperSign when the first one has signed.
+    expect(await latestTestMail(signers[1].email, "", before)).toBeUndefined();
+    const history = await (
+      await request(`/documents/${document.id}/history`, admin.cookie)
+    ).json();
+    expect(
+      history
+        .filter(
+          (event: { event: string }) =>
+            event.event === "invitation_email_accepted",
+        )
+        .map((event: { details: unknown }) => event.details),
+    ).toEqual([
+      {
+        invitationId: links[0].id,
+        signingOrder: 1,
+        sentWith: "invitations_created",
+      },
+    ]);
+
+    // The owner is not emailed about their own turn, and the next signer waits.
+    const own = await browserUpload("Send on create own turn QA.pdf");
+    const ownTurn = await request(
+      `/documents/${own.id}/invitations`,
+      admin.cookie,
+      "POST",
+      {
+        revision: own.revision,
+        termsLocked: true,
+        sendEmail: true,
+        recipients: [
+          { name: "QA owner", email: admin.email, field: field(0, 0.5) },
+          { ...signers[1], field: field(0, 0.65) },
+        ],
+      },
+    );
+    expect(ownTurn.status, await ownTurn.clone().text()).toBe(201);
+    expect(
+      (await ownTurn.json()).map(
+        (link: { invitationEmail: string | null }) => link.invitationEmail,
+      ),
+    ).toEqual([null, null]);
+  });
+
   it("refuses every route outside the key's scope and ignores session cookies", async () => {
     const { secret } = await createKey("QA scope key");
     const own = await upload(secret);
@@ -596,15 +701,31 @@ describe("Admin API keys", () => {
           timeout: 60_000,
         });
 
+      const createdAt = Date.now();
       const created = await cli(
         "create",
         join(folder, "spec.json"),
         "--out",
         join(folder, "plan"),
+        // --send needs SMTP; without it the server refuses before creating anything.
+        ...(emailEnabled ? ["--send"] : []),
       );
       const documentId = created.stdout.match(/Document: ([0-9a-f-]{36})/)?.[1];
       expect(documentId, created.stdout).toBeTruthy();
-      expect(created.stdout).toContain("No email was sent");
+      if (emailEnabled) {
+        expect(created.stdout).toContain(
+          `Emailed Ada QA <${signers[0].email}>.`,
+        );
+        expect(created.stdout).not.toContain(`Emailed Bo QA`);
+        expect(created.stdout).toContain(
+          "PaperSign emails each later signer when their turn opens.",
+        );
+        await waitForTestMail(
+          signers[0].email,
+          "invited you to sign",
+          createdAt,
+        );
+      } else expect(created.stdout).toContain("No email was sent");
       expect(created.stdout).toMatch(/1\. Ada QA .*: ready/);
       expect(created.stdout).toMatch(/2\. Bo QA .*: waiting/);
       const preview = await readFile(join(folder, "plan", "page-1.png"));
@@ -748,6 +869,9 @@ describe("Admin API keys", () => {
         openWorldHint: true,
       });
       expect(tools.papersign_cancel.annotations?.destructiveHint).toBe(true);
+      expect(tools.papersign_create.inputSchema.properties).toHaveProperty(
+        "send_email",
+      );
 
       const relative = await mcp.callTool({
         name: "papersign_plan",

@@ -100,6 +100,8 @@ const recipientName = ref(""),
 const certificateSealingEnabled = ref(false);
 const ownerReviewDialog = ref<InstanceType<typeof OwnerReviewDialog>>();
 const termsLocked = ref(false);
+// Email the first signer as soon as the links exist (only offered with SMTP).
+const sendNow = ref(true);
 const completedRecord = ref<{
   state: string;
   error?: string;
@@ -153,8 +155,21 @@ const activeCount = computed(
 const currentSigner = computed(() =>
   invitations.value.find((invitation) => invitation.canSign),
 );
-const isMine = (invitation: Invitation) =>
+const isMine = (invitation: { email: string }) =>
   invitation.email.toLowerCase() === currentUser.value?.email.toLowerCase();
+// The owner is never emailed about their own turn: they sign here.
+const canEmailFirstSigner = computed(
+  () => emailEnabled.value && !!staged.value[0] && !isMine(staged.value[0]),
+);
+const emailFirstSigner = computed(
+  () => canEmailFirstSigner.value && sendNow.value,
+);
+const createLabel = computed(() => {
+  if (busy.value) return "Creating…";
+  return emailFirstSigner.value
+    ? "Create links and send"
+    : "Create signing links";
+});
 const expiredSigner = computed(() =>
   invitations.value.find(
     (invitation) => invitation.signingStatus === "expired",
@@ -668,7 +683,9 @@ async function createInvitations() {
       !review
     )
       return;
-    await api(`/documents/${id}/invitations`, {
+    const created = await api<
+      Array<Invitation & { invitationEmail: "sent" | "failed" | null }>
+    >(`/documents/${id}/invitations`, {
       method: "POST",
       body: json({
         revision: doc.value!.revision,
@@ -676,12 +693,22 @@ async function createInvitations() {
         termsLocked: termsLocked.value,
         ownerReviewId: review?.reviewId,
         ownerConsentVersion: review?.consent.version,
+        sendEmail: emailFirstSigner.value,
       }),
     });
     staged.value = [];
     await reload();
-    notice.value =
-      "Signing links created. Share each private link with its signer; people sign in the listed order.";
+    const emailed = created.find((r) => r.invitationEmail === "sent");
+    const failed = created.find((r) => r.invitationEmail === "failed");
+    const later =
+      created.length > 1
+        ? " PaperSign emails each later signer when their turn opens."
+        : "";
+    notice.value = emailed
+      ? `Signing links created and ${emailed.name} has been emailed.${later}`
+      : "Signing links created. Share each private link with its signer; people sign in the listed order.";
+    if (failed)
+      error.value = `The links were created, but the email to ${failed.name} could not be sent. Use Email in the signing order to try again.`;
   } catch (e) {
     error.value = errorMessage(e);
   } finally {
@@ -1248,14 +1275,27 @@ async function sendEmail() {
                 To change agreement terms later, upload a new version and
                 collect fresh signatures.
               </p>
+              <label v-if="canEmailFirstSigner" class="checkbox"
+                ><input
+                  v-model="sendNow"
+                  type="checkbox"
+                  :disabled="busy"
+                />Email {{ staged[0].name }} the signing link now.<template
+                  v-if="staged.length > 1"
+                >
+                  PaperSign emails each later signer when their turn
+                  opens.</template
+                ></label
+              >
               <button
                 class="button primary full"
                 :disabled="busy || unfinishedRecipient || !termsLocked"
                 @click="createInvitations"
               >
-                <Link :size="17" />{{
-                  busy ? "Creating…" : "Create signing links"
-                }}
+                <Mail v-if="emailFirstSigner" :size="17" /><Link
+                  v-else
+                  :size="17"
+                />{{ createLabel }}
               </button>
             </div>
           </section>

@@ -110,13 +110,20 @@ export async function acceptOwnerReview(page: Page) {
     .click();
   await dialog.waitFor({ state: "hidden" });
 }
-export async function declareTermsComplete(page: Page) {
+export async function declareTermsComplete(
+  page: Page,
+  { email = false }: { email?: boolean } = {},
+) {
   await page
     .getByLabel(
       "The agreement terms are complete. Recipient text fields are only for signing details, such as names, titles, places and dates.",
       { exact: true },
     )
     .check();
+  // With SMTP on, creating links can also email the first signer (on by
+  // default). Tests choose explicitly so they never email by accident.
+  const sendNow = page.getByLabel(/^Email .+ the signing link now\./);
+  if (await sendNow.count()) await sendNow.setChecked(email);
 }
 export async function cloneDraftForInvitations(page: Page) {
   const id = page.url().split("/").pop()!;

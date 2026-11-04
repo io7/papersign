@@ -6,13 +6,20 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { createClient, KEY_FILE, loadKey, serverUrl } from "./api.mjs";
-import { pendingSigners, reportLines, signerLine as line } from "./format.mjs";
+import {
+  emailLines,
+  pendingSigners,
+  reportLines,
+  signerLine as line,
+} from "./format.mjs";
 import { planSpec } from "./plan.mjs";
 import { previewBoxes, renderPreviews } from "./preview.mjs";
 
 const USAGE = `Usage:
   papersign plan     SPEC.json [--out DIR]      find anchors, write previews; contacts nothing
-  papersign create   SPEC.json [--out DIR]      upload, add fields, create signing links; sends no email
+  papersign create   SPEC.json [--out DIR] [--send]
+                                                upload, add fields, create signing links;
+                                                --send also emails the first signer
   papersign status   DOCUMENT_ID [--links]      signers, order and progress
   papersign email    DOCUMENT_ID [--signer EMAIL]... [--dry-run]
                                                 send invitation emails to pending signers
@@ -83,15 +90,18 @@ const commands = {
     if (plan.ownerText.length)
       revision = (await api.setOwnerText(uploaded.id, revision, plan.ownerText))
         .revision;
-    const links = await api.invite(uploaded.id, revision, plan.recipients);
+    const sendEmail = Boolean(options.send);
+    const links = await api.invite(uploaded.id, revision, plan.recipients, {
+      sendEmail,
+    });
     console.log(`Created signing request for ${name}`);
     console.log(`Document: ${uploaded.id}`);
     printReport(plan);
     for (const link of links)
       console.log(`${signerLine(link)}\n     ${link.url}`);
-    console.log(
-      "No email was sent. Use `papersign email` to send the invitations.",
-    );
+    for (const entry of emailLines(links, sendEmail)) console.log(entry);
+    if (!sendEmail)
+      console.log("Use `papersign email` to send the invitations.");
   },
 
   async status(args, options) {
@@ -164,6 +174,7 @@ const { positionals, values } = parseArgs({
   options: {
     out: { type: "string" },
     links: { type: "boolean" },
+    send: { type: "boolean" },
     signer: { type: "string", multiple: true },
     "dry-run": { type: "boolean" },
     evidence: { type: "string" },

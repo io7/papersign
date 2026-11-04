@@ -86,11 +86,12 @@ export function createClient({ baseUrl, key }) {
     },
     setOwnerText: (id, revision, placements) =>
       call("PUT", `/documents/${id}/placements`, { revision, placements }),
-    invite: (id, revision, recipients) =>
+    invite: (id, revision, recipients, { sendEmail = false } = {}) =>
       call("POST", `/documents/${id}/invitations`, {
         revision,
         termsLocked: true,
         recipients,
+        sendEmail,
       }),
     emailPreview: (id, invitationId) =>
       call("GET", `/documents/${id}/invitations/${invitationId}/email`),

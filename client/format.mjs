@@ -17,6 +17,26 @@ export function signerLine(invitation) {
   return `${invitation.signingOrder}. ${invitation.name} <${invitation.email}>: ${invitation.signingStatus}, ${when}`;
 }
 
+/** What happened to the invitation emails when the signing links were created. */
+export function emailLines(links, sendEmail) {
+  if (!sendEmail) return ["No email was sent."];
+  // Servers before 0.7.6 ignore the request and report nothing.
+  if (links.every((link) => link.invitationEmail === undefined))
+    return ["This PaperSign server cannot email on create. No email was sent."];
+  const lines = links.flatMap((link) => {
+    const who = `${link.name} <${link.email}>`;
+    if (link.invitationEmail === "sent") return [`Emailed ${who}.`];
+    if (link.invitationEmail === "failed")
+      return [`Could not email ${who}. The link works; send the email again.`];
+    return [];
+  });
+  if (!lines.length)
+    lines.push("No one was emailed now: the first turn is yours.");
+  if (links.length > 1)
+    lines.push("PaperSign emails each later signer when their turn opens.");
+  return lines;
+}
+
 export function pendingSigners(document, emails = []) {
   const wanted = emails.map((email) => email.toLowerCase());
   return (document.invitations ?? []).filter(

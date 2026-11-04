@@ -475,6 +475,65 @@ async function emailNewTurns(
     });
   }
 }
+/**
+ * Emails the invitation to each signer who can sign as soon as the links exist.
+ * Later signers hear from PaperSign when their turn opens (emailNewTurns). The
+ * owner is not emailed about their own turn: they are the one sending. Runs
+ * after the links are committed, so a failed email never undoes them.
+ */
+async function emailFirstSigners(
+  doc: typeof documents.$inferSelect,
+  created: InvitationRow[],
+  owner: { id: string; name: string; email: string },
+  log: FastifyBaseLogger,
+) {
+  const outcome = new Map<string, "sent" | "failed">();
+  for (const invitation of created) {
+    if (
+      !signingProgress(invitation, created).canSign ||
+      invitation.email === owner.email.toLowerCase()
+    )
+      continue;
+    const mail = mailPreview(invitation, doc, owner.name, created);
+    let event = "invitation_email_accepted";
+    try {
+      await sendSecurityMail({
+        to: mail.to,
+        subject: mail.subject,
+        text: mail.body,
+        html: mail.html,
+      });
+      outcome.set(invitation.id, "sent");
+    } catch {
+      event = "invitation_email_failed";
+      outcome.set(invitation.id, "failed");
+      log.warn(
+        { documentId: doc.id, invitationId: invitation.id },
+        "Could not email the first signer",
+      );
+    }
+    await db
+      .insert(audit)
+      .values({
+        id: randomUUID(),
+        documentId: doc.id,
+        actor: owner.id,
+        event,
+        details: {
+          invitationId: invitation.id,
+          signingOrder: invitation.signingOrder,
+          sentWith: "invitations_created",
+        },
+      })
+      .catch(() =>
+        log.error(
+          { documentId: doc.id, invitationId: invitation.id, event },
+          "Could not record the invitation email",
+        ),
+      );
+  }
+  return outcome;
+}
 function emailNewTurnsLater(
   documentId: string,
   due: InvitationRow[],
@@ -1060,6 +1119,8 @@ export async function buildApp() {
         termsLocked: z.literal(true),
         ownerReviewId: z.string().uuid().optional(),
         ownerConsentVersion: z.string().optional(),
+        // Email the signer whose turn it is as soon as the links exist.
+        sendEmail: z.boolean().default(false),
         recipients: z
           .array(
             z.object({
@@ -1076,6 +1137,11 @@ export async function buildApp() {
     const document = await ownerDoc(id, u.id);
     if (document.status !== "draft" || document.revision !== body.revision)
       fail(409, "This document has changed or is already awaiting signatures.");
+    if (body.sendEmail && !emailEnabled)
+      fail(
+        503,
+        "Email delivery is not configured. Create the links without email and copy them instead.",
+      );
     if (
       new Set(body.recipients.map((r) => r.email.toLowerCase())).size !==
       body.recipients.length
@@ -1133,8 +1199,9 @@ export async function buildApp() {
         )
       : await renderPdf(document.fileKey, ownerLayers, false);
     const previewKey = await storeFile(preview, "pdf");
+    let created: InvitationRow[];
     try {
-      const created = await db.transaction(async (tx) => {
+      created = await db.transaction(async (tx) => {
         await tx.execute(
           sql`select id from document where id = ${id} and user_id = ${u.id} for update`,
         );
@@ -1206,13 +1273,19 @@ export async function buildApp() {
         });
         return result;
       });
-      return reply
-        .status(201)
-        .send(created.map((r) => publicInvitation(r, created)));
     } catch (error) {
       await removeFile(previewKey);
       throw error;
     }
+    const emailed = body.sendEmail
+      ? await emailFirstSigners(document, created, u, req.log)
+      : new Map<string, "sent" | "failed">();
+    return reply.status(201).send(
+      created.map((r) => ({
+        ...publicInvitation(r, created),
+        invitationEmail: emailed.get(r.id) ?? null,
+      })),
+    );
   });
   app.post(
     "/api/documents/:id/invitations/:invitationId/revoke",

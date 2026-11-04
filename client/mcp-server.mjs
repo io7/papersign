@@ -6,7 +6,12 @@ import { basename, isAbsolute } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { createClient, loadKey, serverUrl } from "./api.mjs";
-import { pendingSigners, reportLines, signerLine } from "./format.mjs";
+import {
+  emailLines,
+  pendingSigners,
+  reportLines,
+  signerLine,
+} from "./format.mjs";
 import { planSpec } from "./plan.mjs";
 import { previewBoxes, renderPreviews } from "./preview.mjs";
 
@@ -98,7 +103,7 @@ const documentId = z.string().uuid().describe("PaperSign document id.");
 const text = (value) => ({ content: [{ type: "text", text: value }] });
 
 export function createPaperSignServer({ baseUrl, key } = {}) {
-  const server = new McpServer({ name: "papersign", version: "0.7.5" });
+  const server = new McpServer({ name: "papersign", version: "0.7.6" });
   const plans = new Map();
   let api;
   async function client() {
@@ -154,9 +159,15 @@ export function createPaperSignServer({ baseUrl, key } = {}) {
     {
       title: "Create a signing request",
       description:
-        "Upload the planned PDF to PaperSign, add the owner's text, and create signing links for the signers in order. Sends no email. Returns the document id and each signer's private link.",
+        "Upload the planned PDF to PaperSign, add the owner's text, and create signing links for the signers in order. Sends no email unless send_email is true. Returns the document id and each signer's private link.",
       inputSchema: {
         plan_id: z.string().uuid().describe("From papersign_plan."),
+        send_email: z
+          .boolean()
+          .optional()
+          .describe(
+            "Also email the first signer their invitation now; PaperSign emails each later signer when their turn opens. This emails real people: only set it when the user has approved sending for this document.",
+          ),
       },
       annotations: {
         readOnlyHint: false,
@@ -164,7 +175,7 @@ export function createPaperSignServer({ baseUrl, key } = {}) {
         openWorldHint: true,
       },
     },
-    async ({ plan_id }) => {
+    async ({ plan_id, send_email = false }) => {
       const planned = plans.get(plan_id);
       if (!planned)
         throw new Error("Unknown plan_id. Run papersign_plan first.");
@@ -183,6 +194,7 @@ export function createPaperSignServer({ baseUrl, key } = {}) {
         uploaded.id,
         revision,
         planned.plan.recipients,
+        { sendEmail: send_email },
       );
       plans.delete(plan_id);
       return text(
@@ -190,7 +202,7 @@ export function createPaperSignServer({ baseUrl, key } = {}) {
           `Created signing request for ${planned.name}.`,
           `document_id: ${uploaded.id}`,
           ...links.map((link) => `${signerLine(link)}\n   ${link.url}`),
-          "No email was sent.",
+          ...emailLines(links, send_email),
         ].join("\n"),
       );
     },
