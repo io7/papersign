@@ -27,6 +27,7 @@ import {
   evidenceRecords,
   exportsTable,
   invitations,
+  signatures,
   signerVerifications,
   user,
 } from "../server/schema.js";
@@ -258,6 +259,11 @@ afterAll(async () => {
       .delete(invitations)
       .where(inArray(invitations.documentId, ownedDocuments));
     await db.delete(documents).where(inArray(documents.id, ownedDocuments));
+    const saved = await db
+      .delete(signatures)
+      .where(inArray(signatures.userId, ownedUsers))
+      .returning({ fileKey: signatures.fileKey });
+    for (const row of saved) files.add(row.fileKey);
     await db.delete(user).where(inArray(user.id, ownedUsers));
   }
   for (const file of files) await removeFile(file);
@@ -769,6 +775,98 @@ describe("Account holders prove the invited address with their authenticator", (
           mail.to === f.email && mail.subject.includes("verification code"),
       ),
     ).toBe(false);
+  });
+  it("lets an authenticator code open the account's saved signatures for that request only", async () => {
+    const f = await fixture(),
+      account = await signerAccount(f.email),
+      other = await fixture();
+    const saved = await account.browser.request("/signatures", {
+      name: "Account signature",
+      source: "drawn",
+      png,
+    });
+    expect(saved.statusCode, saved.body).toBe(201);
+    const signatureId = saved.json().id as string;
+    const signer = new Browser();
+    // Before any proof, a bare link shows nothing from the account.
+    expect((await signer.request(`/sign/${f.token}`)).json()).toMatchObject({
+      canUseSavedSignature: false,
+      canSaveSignature: false,
+    });
+    expect(
+      (await signer.request(`/sign/${f.token}/signatures`)).statusCode,
+    ).toBe(403);
+    expect(
+      (
+        await signer.request(`/sign/${f.token}/verification/authenticator`, {
+          revision: f.revision,
+          code: totp(account.uri),
+        })
+      ).statusCode,
+    ).toBe(200);
+    // Saving still needs a session: it writes to the account.
+    expect((await signer.request(`/sign/${f.token}`)).json()).toMatchObject({
+      canUseSavedSignature: true,
+      canSaveSignature: false,
+    });
+    const library = await signer.request(`/sign/${f.token}/signatures`);
+    expect(library.statusCode, library.body).toBe(200);
+    expect(library.json().map((s: { id: string }) => s.id)).toEqual([
+      signatureId,
+    ]);
+    const image = await signer.request(
+      `/sign/${f.token}/signatures/${signatureId}/image`,
+    );
+    expect(image.statusCode).toBe(200);
+    expect(image.headers["content-type"]).toBe("image/png");
+    // The proof belongs to this request and this browser.
+    expect(
+      (await signer.request(`/sign/${other.token}/signatures`)).statusCode,
+    ).toBe(403);
+    expect(
+      (await new Browser().request(`/sign/${f.token}/signatures`)).statusCode,
+    ).toBe(403);
+    const reviewId = await reviewed(signer, f);
+    const signed = await signer.request(`/sign/${f.token}`, {
+      ...acceptance(f, reviewId),
+      png: undefined,
+      signatureId,
+    });
+    expect(signed.statusCode, signed.body).toBe(200);
+    const [row] = await db
+      .select({ imageKey: invitations.imageKey })
+      .from(invitations)
+      .where(eq(invitations.id, f.invitationId));
+    expect(row.imageKey).toBeTruthy();
+    // Signing used up the proof, and the library closes with it.
+    expect(
+      (await signer.request(`/sign/${f.token}/signatures`)).statusCode,
+    ).toBe(403);
+  });
+  it("keeps saved signatures closed after an email code without a session", async () => {
+    const f = await fixture(),
+      account = await signerAccount(f.email);
+    const saved = await account.browser.request("/signatures", {
+      name: "Account signature",
+      source: "drawn",
+      png,
+    });
+    expect(saved.statusCode, saved.body).toBe(201);
+    const signer = new Browser();
+    await verify(signer, f);
+    expect(
+      (await signer.request(`/sign/${f.token}`)).json().canUseSavedSignature,
+    ).toBe(false);
+    expect(
+      (await signer.request(`/sign/${f.token}/signatures`)).statusCode,
+    ).toBe(403);
+    const reviewId = await reviewed(signer, f);
+    const refused = await signer.request(`/sign/${f.token}`, {
+      ...acceptance(f, reviewId),
+      png: undefined,
+      signatureId: saved.json().id,
+    });
+    expect(refused.statusCode).toBe(403);
   });
   it("keeps the email check for the record when the session is password-only", async () => {
     const f = await fixture(),

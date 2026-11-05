@@ -165,7 +165,8 @@ You can share all the links immediately. The intended recipient must verify an
 email code before viewing and accepting the document. A recipient whose address
 belongs to a PaperSign account with an authenticator can enter the authenticator
 code instead, or continue in one step when already signed in with it; the email
-code stays available. Only the first unfinished signer can
+code stays available. The authenticator code also opens that account's saved
+signatures for the request, without signing in. Only the first unfinished signer can
 sign; everyone else sees a waiting screen with **Check again**. Completing one
 signature unlocks the next person's link, and with email configured PaperSign
 tells that person it is their turn. The owner can refresh the signer list

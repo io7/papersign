@@ -71,6 +71,7 @@ import {
   confirmAccountSession,
   requireVerifiedMailbox,
   consumeSignerVerification,
+  authenticatorGrantAccount,
   type VerificationContext,
 } from "./signer-verification.js";
 import {
@@ -1454,9 +1455,7 @@ export async function buildApp() {
   app.get("/api/sign/:token", async (req) => {
     const snapshot = await signingSnapshot(req, true);
     const { invitation: r, document: d } = snapshot;
-    const session = await auth.api.getSession({
-      headers: fromNodeHeaders(req.headers),
-    });
+    const session = await signedInAsInvited(req, r);
     return {
       name: r.name,
       documentName: d.name,
@@ -1479,8 +1478,11 @@ export async function buildApp() {
             })
           : undefined,
       consent: SIGNING_CONSENT,
-      canUseSavedSignature:
-        session?.user.email.toLowerCase() === r.email.toLowerCase(),
+      canUseSavedSignature: Boolean(
+        session?.user.id ?? (await authenticatorOwner(req, r, d)),
+      ),
+      // Saving a new signature writes to the account, so it needs a session.
+      canSaveSignature: Boolean(session),
       ...signingProgress(r, snapshot.recipients),
     };
   });
@@ -1496,6 +1498,66 @@ export async function buildApp() {
       purpose: "sign",
     };
   }
+  async function signedInAsInvited(req: FastifyRequest, r: InvitationRow) {
+    const session = await auth.api.getSession({
+      headers: fromNodeHeaders(req.headers),
+    });
+    return session?.user.email.toLowerCase() === r.email.toLowerCase()
+      ? session
+      : undefined;
+  }
+  async function authenticatorOwner(
+    req: FastifyRequest,
+    r: InvitationRow,
+    d: typeof documents.$inferSelect,
+  ) {
+    return r.state === "pending"
+      ? authenticatorGrantAccount(req, signerContext(r, d))
+      : undefined;
+  }
+  // Saved signatures belong to the account with the invited address. A
+  // session signed in as that address may use them, and so may a browser
+  // that proved this request with that account's authenticator code.
+  async function savedSignatureOwner(
+    req: FastifyRequest,
+    r: InvitationRow,
+    d: typeof documents.$inferSelect,
+  ) {
+    const owner =
+      (await signedInAsInvited(req, r))?.user.id ??
+      (await authenticatorOwner(req, r, d));
+    return (
+      owner ??
+      fail(
+        403,
+        "Sign in with the invited email address to use a saved signature.",
+      )
+    );
+  }
+  app.get("/api/sign/:token/signatures", async (req) => {
+    const { invitation, document } = await recipient(req);
+    const owner = await savedSignatureOwner(req, invitation, document);
+    return (
+      await db
+        .select()
+        .from(signatures)
+        .where(and(eq(signatures.userId, owner), isNull(signatures.deletedAt)))
+        .orderBy(desc(signatures.isDefault), desc(signatures.createdAt))
+    ).map(publicSignature);
+  });
+  app.get("/api/sign/:token/signatures/:id/image", async (req, reply) => {
+    const { invitation, document } = await recipient(req);
+    const owner = await savedSignatureOwner(req, invitation, document);
+    const record = await db.query.signatures.findFirst({
+      where: and(
+        eq(signatures.id, getId(req)),
+        eq(signatures.userId, owner),
+        isNull(signatures.deletedAt),
+      ),
+    });
+    if (!record) fail(404, "Signature not found.");
+    return reply.type("image/png").send(await loadFile(record!.fileKey));
+  });
   app.post(
     "/api/sign/:token/verification/send",
     { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } },
@@ -1678,19 +1740,14 @@ export async function buildApp() {
       validateTextValues(r.field, body.textValues, document.pages);
       let normalized: { bytes: Buffer; width: number; height: number };
       if (body.signatureId) {
-        const u = await actor(req),
+        const owner = await savedSignatureOwner(req, r, document),
           sig = await db.query.signatures.findFirst({
             where: and(
               eq(signatures.id, body.signatureId),
-              eq(signatures.userId, u.id),
+              eq(signatures.userId, owner),
               isNull(signatures.deletedAt),
             ),
           });
-        if (u.email.toLowerCase() !== r.email.toLowerCase())
-          fail(
-            403,
-            "Sign in with the invited email address to use a saved signature.",
-          );
         if (!sig) fail(404, "Signature not found.");
         normalized = {
           bytes: await loadFile(sig!.fileKey),

@@ -595,6 +595,38 @@ export async function requireVerifiedMailbox(
     };
   return { ...proof, method: "email-one-time-code" };
 }
+/**
+ * The account whose authenticator proved this browser's open signing grant,
+ * while that account still has the invited address. Lets the signer use the
+ * account's saved signatures for this one request without signing in.
+ */
+export async function authenticatorGrantAccount(
+  req: FastifyRequest,
+  context: VerificationContext,
+) {
+  const row = await browserChallenge(req, context);
+  if (
+    row?.method !== "account-authenticator" ||
+    !row.userId ||
+    !row.verifiedAt ||
+    !row.deliveredAt ||
+    row.consumedAt ||
+    row.expiresAt <= new Date()
+  )
+    return;
+  const [account] = await db
+    .select({ id: user.id })
+    .from(user)
+    .where(
+      and(
+        eq(user.id, row.userId),
+        sql`lower(${user.email}) = ${context.email.toLowerCase()}`,
+        isNull(user.deletionRequestedAt),
+      ),
+    )
+    .limit(1);
+  return account?.id;
+}
 export async function consumeSignerVerification(
   reader: VerificationDb,
   verificationId: string,

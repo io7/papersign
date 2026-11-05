@@ -30,6 +30,7 @@ const details = ref<
     recordVerification?: SigningVerification;
     consent: { version: string; text: string };
     canUseSavedSignature: boolean;
+    canSaveSignature: boolean;
     cancelled?: boolean;
   }
 >();
@@ -138,11 +139,33 @@ const name = ref(""),
 const pdfUrl = computed(
   () => `/api/sign/${token}/pdf?revision=${details.value?.revision}`,
 );
+const savedImage = (id: string) => `/api/sign/${token}/signatures/${id}/image`;
 const preview = computed(() =>
   method.value === "saved" && selected.value
-    ? `/api/signatures/${selected.value}/image`
+    ? savedImage(selected.value)
     : signature.value?.png,
 );
+// Saved signatures open with a session as the invited address, or once this
+// request was verified with that account's authenticator. Loaded once; the
+// drawing pad stays available if they cannot be loaded.
+let savedSignaturesLoaded = false;
+async function loadSavedSignatures() {
+  if (
+    savedSignaturesLoaded ||
+    details.value?.state !== "pending" ||
+    !details.value.canUseSavedSignature
+  )
+    return;
+  savedSignaturesLoaded = true;
+  try {
+    signatures.value = await api(`/sign/${token}/signatures`);
+  } catch {
+    savedSignaturesLoaded = false;
+    return;
+  }
+  selected.value = signatures.value[0]?.id ?? "";
+  if (selected.value) method.value = "saved";
+}
 function jumpToPage(index: number) {
   pageIndex.value = index;
   pdfStage.value?.scrollToPage(index);
@@ -187,7 +210,104 @@ async function load(resetIdentity = true) {
     details.value.recordVerification?.verified
   )
     completedRecord.value = await api(`/sign/${token}/record`);
+  await loadSavedSignatures();
 }
+// The final PDF and its independent timestamp are prepared in the background.
+// While either is on its way the page asks again by itself: every 2 seconds
+// at first, then less often, and it hands back to "Check again" after ten
+// minutes. It pauses while the tab is hidden.
+const RECORD_POLL_LIMIT = 10 * 60_000;
+const recordPollStopped = ref(false);
+let recordPollTimer: ReturnType<typeof setTimeout> | undefined,
+  recordPollStarted = 0;
+const recordPending = computed(() => {
+  const record = completedRecord.value;
+  if (record?.state === "preparing") return true;
+  return record?.state === "ready" && record.timestamp?.state === "pending";
+});
+const recordAnnouncement = computed(() => {
+  if (completedRecord.value?.state === "preparing")
+    return recordPollStopped.value
+      ? "Generating the final PDF is taking longer than usual."
+      : "Generating the final PDF.";
+  if (completedRecord.value?.state === "ready")
+    return "The final PDF is ready.";
+  return "";
+});
+const timestampNote = computed(() => {
+  switch (completedRecord.value?.timestamp?.state) {
+    case undefined:
+      return "";
+    case "available":
+      return "An independent timestamp is included in the signing evidence.";
+    case "pending":
+      return recordPollStopped.value
+        ? "An independent timestamp is being requested. Check again before saving the evidence package."
+        : "An independent timestamp is being requested. This page updates when it arrives.";
+    case "failed":
+      return "The independent timestamp could not be obtained. This record currently contains PaperSign's recorded times only.";
+    default:
+      return "Independent timestamping is not configured. This record contains PaperSign's recorded times only.";
+  }
+});
+function recordPollDelay(elapsed: number) {
+  if (elapsed < 30_000) return 2_000;
+  if (elapsed < 2 * 60_000) return 5_000;
+  return 15_000;
+}
+function scheduleRecordPoll() {
+  clearTimeout(recordPollTimer);
+  recordPollTimer = undefined;
+  if (!recordPending.value || recordPollStopped.value) return;
+  if (!recordPollStarted) recordPollStarted = Date.now();
+  const elapsed = Date.now() - recordPollStarted;
+  if (elapsed >= RECORD_POLL_LIMIT) {
+    recordPollStopped.value = true;
+    return;
+  }
+  recordPollTimer = setTimeout(pollRecord, recordPollDelay(elapsed));
+}
+async function pollRecord() {
+  recordPollTimer = undefined;
+  // A hidden tab waits; becoming visible asks again at once.
+  if (document.hidden) return;
+  try {
+    completedRecord.value = await api(`/sign/${token}/record`);
+  } catch (e) {
+    error.value = errorMessage(e);
+    recordPollStopped.value = true;
+    return;
+  }
+  scheduleRecordPoll();
+}
+function resumeRecordPoll() {
+  if (
+    !document.hidden &&
+    recordPending.value &&
+    !recordPollStopped.value &&
+    !recordPollTimer
+  )
+    void pollRecord();
+}
+async function checkRecordAgain() {
+  recordPollStopped.value = false;
+  recordPollStarted = 0;
+  await checkAgain();
+  scheduleRecordPoll();
+}
+watch(recordPending, (pending) => {
+  if (pending) scheduleRecordPoll();
+  else {
+    clearTimeout(recordPollTimer);
+    recordPollTimer = undefined;
+    recordPollStarted = 0;
+  }
+});
+document.addEventListener("visibilitychange", resumeRecordPoll);
+onBeforeUnmount(() => {
+  clearTimeout(recordPollTimer);
+  document.removeEventListener("visibilitychange", resumeRecordPoll);
+});
 async function checkAgain() {
   busy.value = true;
   error.value = "";
@@ -206,11 +326,6 @@ async function checkAgain() {
 onMounted(async () => {
   try {
     await load();
-    if (currentUser.value && details.value?.canUseSavedSignature) {
-      signatures.value = await api("/signatures");
-      selected.value = signatures.value[0]?.id ?? "";
-      if (selected.value) method.value = "saved";
-    }
   } catch (e) {
     error.value = errorMessage(e);
   } finally {
@@ -339,8 +454,7 @@ async function sign() {
     if (
       !signatureId &&
       saveToAccount.value &&
-      currentUser.value &&
-      details.value.canUseSavedSignature &&
+      details.value.canSaveSignature &&
       signature.value
     ) {
       const saved = await api<Signature>("/signatures", {
@@ -396,11 +510,11 @@ async function sign() {
           >PaperSign<span class="brand-dot">.</span></span
         ></RouterLink
       ><RouterLink
-        v-if="!currentUser"
+        v-if="!currentUser && !signatures.length"
         :to="{ path: '/login', query: { next: route.fullPath } }"
         class="text-button"
         >Sign in to use saved signatures</RouterLink
-      ><span v-else class="muted">{{ currentUser.name }}</span>
+      ><span v-else-if="currentUser" class="muted">{{ currentUser.name }}</span>
     </header>
     <p v-if="loading" class="loading" role="status">
       Opening your signing request…
@@ -434,6 +548,7 @@ async function sign() {
           aria-labelledby="record-access-heading"
         >
           <h2 id="record-access-heading">Your signing record</h2>
+          <p class="sr-only" role="status">{{ recordAnnouncement }}</p>
           <template v-if="!details.recordVerification?.verified">
             <p>
               Verify
@@ -561,25 +676,44 @@ async function sign() {
               Keep the receipt separately from the evidence download. It lets
               you check later that the preserved record is the same one.
             </p>
-            <p v-if="completedRecord.timestamp" class="hint" role="status">
-              {{
-                completedRecord.timestamp.state === "available"
-                  ? "An independent timestamp is included in the signing evidence."
-                  : completedRecord.timestamp.state === "pending"
-                    ? "An independent timestamp is being requested. Check again before saving the evidence package."
-                    : completedRecord.timestamp.state === "failed"
-                      ? "The independent timestamp could not be obtained. This record currently contains PaperSign's recorded times only."
-                      : "Independent timestamping is not configured. This record contains PaperSign's recorded times only."
-              }}
+            <p v-if="timestampNote" class="hint" role="status">
+              {{ timestampNote }}
             </p>
             <button
-              v-if="completedRecord.timestamp?.state === 'pending'"
+              v-if="
+                completedRecord.timestamp?.state === 'pending' &&
+                recordPollStopped
+              "
               class="text-button"
               :disabled="busy"
-              @click="checkAgain"
+              @click="checkRecordAgain"
             >
               {{ busy ? "Checking…" : "Check timestamp status" }}
             </button>
+          </template>
+          <template v-else-if="completedRecord?.state === 'preparing'">
+            <div v-if="!recordPollStopped" class="record-preparing">
+              <span class="record-spinner" aria-hidden="true"></span>
+              <div>
+                <p class="record-preparing-title">Generating the final PDF…</p>
+                <p class="record-preparing-hint">
+                  This page updates by itself when it is ready.
+                </p>
+              </div>
+            </div>
+            <template v-else>
+              <p>
+                Generating the final PDF is taking longer than usual. Check
+                again in a few minutes.
+              </p>
+              <button
+                class="button secondary full check"
+                :disabled="busy"
+                @click="checkRecordAgain"
+              >
+                <RefreshCw :size="17" />{{ busy ? "Checking…" : "Check again" }}
+              </button>
+            </template>
           </template>
           <template v-else>
             <p role="status">
@@ -694,8 +828,10 @@ async function sign() {
         </template>
         <template v-else-if="verifyMode === 'authenticator'">
           <p class="verify-intro">
-            This address has a PaperSign account with two-step verification.
-            Enter the code from your authenticator app to open the document.
+            Signing as <strong>{{ details.name }}</strong> ({{
+              details.verification?.emailHint
+            }}). This account has two-step verification. Enter the code from
+            your authenticator app to open the document.
           </p>
           <p v-if="error" class="notice error" role="alert">{{ error }}</p>
           <form @submit.prevent="verifyWith('authenticator')">
@@ -804,9 +940,10 @@ async function sign() {
             Use my authenticator app instead
           </button>
         </template>
-        <p v-if="verifyMode !== 'account'" class="hint verify-footnote">
-          Never share your code with anyone, including the sender.
-        </p>
+        <div v-if="verifyMode !== 'account'" class="hint verify-footnote">
+          <p>Never share your code with anyone, including the sender.</p>
+          <p>Not you? Ask the sender for your own signing link.</p>
+        </div>
       </section>
       <template v-else
         ><div class="sign-title">
@@ -929,10 +1066,9 @@ async function sign() {
                 :aria-pressed="selected === s.id"
                 @click="selected = s.id"
               >
-                <img
-                  :src="`/api/signatures/${s.id}/image`"
-                  :alt="s.name"
-                /><span>{{ s.name }}</span>
+                <img :src="savedImage(s.id)" :alt="s.name" /><span>{{
+                  s.name
+                }}</span>
               </button>
             </div>
             <SignatureInput v-else @change="signature = $event" />
@@ -997,11 +1133,7 @@ async function sign() {
                   maxlength="100"
                   autocomplete="name" /></label
               ><label
-                v-if="
-                  currentUser &&
-                  details.canUseSavedSignature &&
-                  method === 'new'
-                "
+                v-if="details.canSaveSignature && method === 'new'"
                 class="checkbox"
                 ><input v-model="saveToAccount" type="checkbox" />Save this
                 signature to my account</label
@@ -1101,6 +1233,12 @@ async function sign() {
   padding-top: 18px;
   border-top: 1px solid var(--line);
 }
+.verify-footnote p {
+  margin: 0;
+}
+.verify-footnote p + p {
+  margin-top: 4px;
+}
 input.code-input {
   min-height: 52px;
   font-size: 22px;
@@ -1171,6 +1309,46 @@ input.code-input {
 }
 .record-access > .text-button {
   margin-top: 10px;
+}
+.record-preparing {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 18px;
+  padding: 18px 20px;
+  background: var(--soft);
+  border-radius: var(--radius);
+}
+.record-access .record-preparing p {
+  margin: 0;
+}
+.record-preparing-title {
+  color: var(--ink);
+  font-weight: 570;
+}
+.record-preparing-hint {
+  color: var(--muted);
+  font-size: 14px;
+}
+.record-spinner {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 3px solid #cfdfd1;
+  border-top-color: var(--green);
+  border-radius: 50%;
+  animation: record-spin 0.9s linear infinite;
+}
+@keyframes record-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* Slower rather than still, so it never looks frozen. */
+@media (prefers-reduced-motion: reduce) {
+  .record-spinner {
+    animation-duration: 2.4s;
+  }
 }
 .signed-exit {
   display: flex;

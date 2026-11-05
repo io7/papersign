@@ -6,7 +6,8 @@ import { SIGNING_CONSENT } from "../../shared/signing-consent.js";
 
 const artifacts = ".local/qa/signing-readiness";
 const token = "s".repeat(43),
-  reviewId = randomUUID();
+  reviewId = randomUUID(),
+  savedSignatureId = randomUUID();
 async function mockRequest(
   page: Page,
   state: {
@@ -22,14 +23,36 @@ async function mockRequest(
     recordAccountSession?: boolean;
     recordAccountRefused?: boolean;
     proofs?: Array<{ path: string; body: Record<string, unknown> }>;
+    /** The invited account has a saved signature, opened by the authenticator proof. */
+    savedSignatures?: boolean;
+    recordRequests?: number;
   },
 ) {
-  const pdf = await samplePdf();
+  const pdf = await samplePdf(),
+    png = await signaturePng();
   await page.route(`**/api/sign/${token}**`, async (route) => {
     const request = route.request(),
       path = new URL(request.url()).pathname;
-    if (path.endsWith("/record"))
+    if (path.endsWith("/record")) {
+      state.recordRequests = (state.recordRequests ?? 0) + 1;
       return route.fulfill({ json: state.record ?? { state: "waiting" } });
+    }
+    if (path.endsWith(`/signatures/${savedSignatureId}/image`))
+      return route.fulfill({ contentType: "image/png", body: png });
+    if (path.endsWith("/signatures"))
+      return route.fulfill({
+        json: [
+          {
+            id: savedSignatureId,
+            name: "My signature",
+            source: "drawn",
+            width: 400,
+            height: 120,
+            isDefault: true,
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      });
     if (path.endsWith("/verification/send"))
       return route.fulfill({
         json: { sent: true, expiresInSeconds: 600, resendAfterSeconds: 60 },
@@ -131,7 +154,8 @@ async function mockRequest(
             }
           : undefined,
         consent: SIGNING_CONSENT,
-        canUseSavedSignature: false,
+        canUseSavedSignature: Boolean(state.savedSignatures && state.verified),
+        canSaveSignature: false,
       },
     });
   });
@@ -215,10 +239,13 @@ test("completed records distinguish missing historical evidence and independent 
     page.getByRole("link", { name: "Download signing evidence" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Check timestamp status" }),
+    page.getByText("This page updates when it arrives.", { exact: false }),
   ).toBeVisible();
+  // The page asks again by itself; the button only returns if it gives up.
+  await expect(
+    page.getByRole("button", { name: "Check timestamp status" }),
+  ).toHaveCount(0);
   state.record.timestamp = { state: "failed" };
-  await page.getByRole("button", { name: "Check timestamp status" }).click();
   await expect(
     page.getByText("The independent timestamp could not be obtained.", {
       exact: false,
@@ -502,4 +529,156 @@ test("the signing record falls back to the email code when the session is refuse
   expect(state.proofs).toEqual([
     { path: "record/account", body: { revision: 3 } },
   ]);
+});
+
+test("the authenticator screen names the signer, and its code opens their saved signatures", async ({
+  page,
+}) => {
+  const state = {
+    verified: false,
+    failedPdf: false,
+    signed: false,
+    deliveryAvailable: true,
+    authenticatorAvailable: true,
+    savedSignatures: true,
+    accepted: undefined as Record<string, unknown> | undefined,
+  };
+  await mockRequest(page, state);
+  await page.goto(`/sign/${token}`);
+  await expect(
+    page.getByText(
+      "Signing as Synthetic invited signer (s•••@example.test). This account has two-step verification.",
+      { exact: false },
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Not you? Ask the sender for your own signing link."),
+  ).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await capture(page, "authenticator-identity-mobile");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.getByLabel("Authenticator code", { exact: true }).fill("123456");
+  await page
+    .getByRole("button", { name: "Verify and open document", exact: true })
+    .click();
+  await expect(page.locator(".pdf-overlay")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Saved signature", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByRole("img", { name: "My signature", exact: true }),
+  ).toBeVisible();
+  // No account session, so nothing is offered that would write to it.
+  await expect(
+    page.getByRole("link", { name: "Sign in to use saved signatures" }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "New signature", exact: true }).click();
+  await expect(
+    page.getByLabel("Save this signature to my account"),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Saved signature", exact: true })
+    .click();
+  await page.getByLabel(SIGNING_CONSENT.text).check();
+  await capture(page, "authenticator-saved-signature");
+  await page
+    .getByRole("button", { name: "Agree and sign", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Your signature is in place." }),
+  ).toBeVisible();
+  expect(state.accepted?.signatureId).toBe(savedSignatureId);
+  expect(state.accepted?.png).toBeUndefined();
+});
+
+test("the final PDF appears by itself once it is generated", async ({
+  page,
+}) => {
+  const state = {
+    verified: true,
+    failedPdf: false,
+    signed: true,
+    deliveryAvailable: true,
+    recordVerified: true,
+    record: { state: "preparing" } as Record<string, unknown>,
+    recordRequests: 0,
+  };
+  await page.clock.install();
+  await mockRequest(page, state);
+  await page.goto(`/sign/${token}`);
+  await expect(page.getByText("Generating the final PDF…")).toBeVisible();
+  await expect(
+    page.getByText("This page updates by itself when it is ready."),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Check again" })).toHaveCount(
+    0,
+  );
+  await capture(page, "record-generating");
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await capture(page, "record-generating-mobile");
+  // It keeps asking without a click.
+  const before = state.recordRequests;
+  await page.clock.runFor(2_500);
+  await expect.poll(() => state.recordRequests).toBeGreaterThan(before);
+  // After ten minutes it stops and hands the check back to the signer.
+  await page.clock.fastForward("11:00");
+  await expect(
+    page.getByText("Check again in a few minutes.", { exact: false }),
+  ).toBeVisible();
+  const stopped = state.recordRequests;
+  await page.clock.runFor(60_000);
+  expect(state.recordRequests).toBe(stopped);
+  state.record = {
+    state: "ready",
+    outcome: "all-signed",
+    evidenceComplete: false,
+    participants: [
+      { name: "Synthetic invited signer", order: 1, state: "signed" },
+    ],
+  };
+  await page.getByRole("button", { name: "Check again" }).click();
+  await expect(
+    page.getByRole("link", { name: "Download final PDF", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("Generating the final PDF…")).toHaveCount(0);
+});
+
+test("a generated PDF replaces the spinner without a click", async ({
+  page,
+}) => {
+  const state = {
+    verified: true,
+    failedPdf: false,
+    signed: true,
+    deliveryAvailable: true,
+    recordVerified: true,
+    record: { state: "preparing" } as Record<string, unknown>,
+  };
+  await mockRequest(page, state);
+  await page.goto(`/sign/${token}`);
+  await expect(page.getByText("Generating the final PDF…")).toBeVisible();
+  state.record = {
+    state: "ready",
+    outcome: "all-signed",
+    evidenceComplete: false,
+    participants: [
+      { name: "Synthetic invited signer", order: 1, state: "signed" },
+    ],
+  };
+  await expect(
+    page.getByRole("link", { name: "Download final PDF", exact: true }),
+  ).toBeVisible({ timeout: 6_000 });
+  await expect(
+    page.getByRole("status").filter({ hasText: "The final PDF is ready." }),
+  ).toHaveCount(1);
 });
